@@ -124,7 +124,7 @@ static void track_lfo_tick(track_t *t)                  /* (one core: the whole 
 }
 #endif
 
-/* 2LFO: always UNI (0..32767), no fade, independent of LFO1.
+/* 2LFO: no fade, independent of LFO1.
  * 16-bit phase for compactness; S&H uses a hash of the cycle counter. */
 static void track_lfo2_tick(track_t *t)
 {
@@ -136,12 +136,16 @@ static void track_lfo2_tick(track_t *t)
     if (wave == 4) {                                     /* S&H: new value each cycle (hash of track+ph) */
         if (t->lfo2_ph < old) {
             uint32_t h = ((uint32_t)(t - trk) * 2246822519u) ^ ((uint32_t)t->lfo2_ph * 2654435761u);
-            t->lfo2_val = (int16_t)((h >> 1) & 0x7FFF);
+            t->lfo2_val = t->p[P_L2POL]
+                ? (int16_t)((h >> 1) & 0x7FFF)          /* UNI: 0..+32767 */
+                : (int16_t)(h >> 1);                     /* BI: full signed range */
         }
         return;
     }
     uint32_t ph32 = (uint32_t)t->lfo2_ph << 16;
-    t->lfo2_val = (int16_t)((lfo_wave_gen(wave, 0, ph32) + 32768) >> 1);
+    t->lfo2_val = (int16_t)(t->p[P_L2POL]
+        ? (lfo_wave_gen(wave, 0, ph32) + 32768) >> 1   /* UNI: 0..+32767 */
+        : lfo_wave_gen(wave, 0, ph32));                 /* BI:  -32768..+32767 */
 }
 
 /* voices the engine may use (POLY and UNISON): its cap, else all of them */

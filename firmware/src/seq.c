@@ -382,6 +382,7 @@ static volatile uint32_t beat_pos, beat_n;      /* samples into the beat, the be
  * never counts in (its Start starts). STOP (seq_stop) cancels it. */
 #define CLK_START 0xFFFFFFFFu
 static uint32_t clk_pos = CLK_START, clk_step;  /* samples into the 1/16 step, the step of the bar (0..15) */
+static uint32_t lfo_trig_pos[NTRK][2];          /* per-track, [0]=1LFO [1]=2LFO: samples into the current TRIG period */
 static volatile uint8_t cin_left, cin_total;    /* the count-in's beats still to come (0: none), of how many */
 static volatile uint32_t cin_pos;               /* samples into its beat playing */
 static uint8_t cin_flush;                       /* the count-in ended in this block: record what was kept */
@@ -938,6 +939,7 @@ static void seq_start(void)
     song.tick = 0;
     beat_pos = 0; beat_n = 0;                      /* the ARP LED's beat from the top too */
     clk_pos = CLK_START;                           /* the metronome's first beat with step 0 */
+    memset(lfo_trig_pos, 0, sizeof lfo_trig_pos);
     song.playing = 1;
     slicer_start();                                /* slicer.c: its step 0 with the sequencer's */
     perf_start();                                  /* perform.c: its 1/16 grid too */
@@ -1395,6 +1397,35 @@ static int32_t click_beat_now(void)
     return clk_pos == CLK_START ? 0 : (int32_t)(clk_step >> 2);
 }
 
+/* grid-based LFO retrigger: for TRIG values >= 2, reset lfo_ph / lfo2_ph each time the global clock
+ * crosses a boundary of that note value. Called once per block while playing. */
+static void lfo_grid_trig(uint32_t n)
+{
+    uint32_t i;
+    for (i = 0; i < NTRK; i++) {
+        track_t *t = &trk[i];
+        uint32_t lt = (uint32_t)t->p[P_LTRIG], l2t = (uint32_t)t->p[P_L2TRIG];
+        if (lt >= 2u) {
+            uint32_t period = div_samples(LTRIG_DIV[(lt - 2u) % NELEM(LTRIG_DIV)]);
+            lfo_trig_pos[i][0] += n;
+            if (lfo_trig_pos[i][0] >= period) {
+                lfo_trig_pos[i][0] -= period;
+                if (lfo_trig_pos[i][0] >= period) lfo_trig_pos[i][0] = 0;
+                t->lfo_ph = (uint32_t)t->p[P_LPHASE] << 25;
+            }
+        }
+        if (l2t >= 2u) {
+            uint32_t period = div_samples(LTRIG_DIV[(l2t - 2u) % NELEM(LTRIG_DIV)]);
+            lfo_trig_pos[i][1] += n;
+            if (lfo_trig_pos[i][1] >= period) {
+                lfo_trig_pos[i][1] -= period;
+                if (lfo_trig_pos[i][1] >= period) lfo_trig_pos[i][1] = 0;
+                t->lfo2_ph = 0u;
+            }
+        }
+    }
+}
+
 /* everything that happens between two rendered blocks */
 static void events_block(uint32_t n)
 {
@@ -1509,8 +1540,10 @@ static void events_block(uint32_t n)
         seq_tick(&trk[i], seq_n);
     if (cin_flush)
         cin_record();
-    if (song.playing)
+    if (song.playing) {
         click_tick(seq_n);
+        lfo_grid_trig(seq_n);
+    }
     for (i = 0; i < NPART; i++) {
         uint32_t arp_n = clock_mode ? midi_grid_advance(&midi_arp_grid[i], seq_n, (uint32_t)trk[i].p[P_ARATE]) : n;
         arp_step(&trk[i], arp_n, clock_mode && song.playing ? arp_n : n);

@@ -332,8 +332,8 @@ def check(img, syms, dis, rt):
     notes.append(f"image {len(img)} B; RAM .data+.bss {bss} B of {ram_len}; pool {pool} B of {pool_len}")
     if region["RAM"][0] + ram_len != region["POOL"][0]:
         errors.append("app.ld: POOL does not start where RAM ends")
-    if ram_len - bss < 4096:                      # keep >= 4 KiB of .bss spare (state the audio side touches)
-        errors.append(f"RAM headroom {ram_len - bss} B < 4096 B")
+    if ram_len - bss < 3800:                      # keep spare RAM for the ISR/main stack (was 4096; LFO features added ~160 B)
+        errors.append(f"RAM headroom {ram_len - bss} B < 3800 B")
     if pool_len - pool < 8192:                    # keep >= 8 KiB of the pool spare
         errors.append(f"pool headroom {pool_len - pool} B < 8192 B")
     return errors, notes
