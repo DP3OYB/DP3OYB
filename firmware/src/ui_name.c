@@ -197,10 +197,16 @@ static void nm_do(uint32_t f)                          /* a black key's function
     }
 }
 /* PROJECT, KNOB 3: random names, adjective + noun, at most 5 + 1 + 6 characters (no trademarks, no names) */
-static const char *const NM_RA[16] = {"NEON", "GLASS", "AMBER", "SOLAR", "LUNAR", "SILK", "IRON", "PALE",
-                                      "DEEP", "WILD", "QUIET", "SLOW", "GOLD", "BLUE", "DUSTY", "HAZY"};
-static const char *const NM_RB[16] = {"DRIFT", "PULSE", "ORBIT", "RIVER", "HARBOR", "TIDE", "ECHO", "GARDEN",
-                                      "SIGNAL", "MIRROR", "CANAL", "FIELD", "COAST", "CLOUD", "BLOOM", "SAIL"};
+static const char *const NM_RA[32] = {
+    "DANG", "LIL",   "DOOF",  "KID",   "WINKY", "YOUR",  "FAT",   "SHART",
+    "DERP", "ITCHY", "FLICK", "SLOW",  "TRIP",  "DONDE", "SHART", "LAZY",
+    "LUMPY","WHODA", "LARP",  "SPOOF", "GIGA",  "VAPOR", "SKID",  "PAIN",
+    "CHEAP","POOSH", "CHAD",  "MEGA",  "PLUM",  "MUSTY", "FRACK", "FREE"};
+static const char *const NM_RB[32] = {
+    "DITCH","HILL",  "WORLD", "NATION","WIGGLE","TERROR","FLAP",  "WADDLE",
+    "EAGLE","DOG",   "CAT",   "TURTLE","VALLEY","CACTUS","MOVIE", "SONG",
+    "COUNTY","POTATO","TRAIL","MAP",   "BERG",  "COUCH", "CRUNCH","STRAIT",
+    "BEND", "FOLDS", "MEADOW","HOUSE", "STREET","SNAKE", "JAM",   "AVENUE"};
 static void nm_random(void)                            /* a new name, never the one in the field */
 {
     char b[NM_LEN + 1u];
@@ -211,9 +217,9 @@ static void nm_random(void)                            /* a new name, never the 
         x ^= x >> 17;
         x ^= x << 5;
         nm.rnd = x;
-        str_cpy(b, NM_RA[x & 15u], sizeof b);
+        str_cpy(b, NM_RA[x & 31u], sizeof b);
         str_cpy(b + str_len(b), " ", 2);
-        str_cpy(b + str_len(b), NM_RB[(x >> 4) & 15u], sizeof b - str_len(b));
+        str_cpy(b + str_len(b), NM_RB[(x >> 5) & 31u], sizeof b - str_len(b));
     } while (str_eq(b, nm.s));
     str_cpy(nm.s, b, sizeof nm.s);
     nm.len = nm.cur = (uint8_t)str_len(nm.s);

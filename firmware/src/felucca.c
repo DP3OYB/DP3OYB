@@ -37,7 +37,7 @@
                                   * PLUGIN commands, editor_plugin.c); 0: none, the engines and RAM of 1.8 */
 #endif
 #ifndef FELUCCA_ID
-#define FELUCCA_ID "FM-1_900"    /* package identity (build.py: the .fwsc marker string) */
+#define FELUCCA_ID "FM-1_50509"  /* package identity (build.py: the .fwsc marker string) */
 #endif
 #ifndef FELUCCA_CPU2
 #define FELUCCA_CPU2 1           /* 1 (1.6.1): the second core is built in and renders some parts when MENU > SYSTEM >

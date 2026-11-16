@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Parameter descriptors, formatting and the page table. */
-static const char *const N_LWAVE[] = {"SIN", "TRI", "SAW", "SQR", "S&H"};
+static const char *const N_LWAVE[] = {"SIN", "TRI", "SAW", "SQR", "S&H", "RSAW"};
 /* LFO 2 (1.2, #154). SYNC: OFF (RATE), or one cycle per note value of the tempo, longest first (LSYNC_DIV: its N_DIV);
  * TRIG: NOTE restarts it at PHS on a fresh phrase (as before), FREE never; POL: BI -1..+1 (as before), UNI 0..+1 */
 static const char *const N_LSYNC[] = {"OFF", "4BAR", "2BAR", "1/1", "1/2", "1/4", "1/8", "8T", "1/16", "16T", "1/32"};
@@ -48,9 +48,9 @@ static const char *const N_ALLOC[] = {"ROT", "REUSE"};
 static const char *const N_ORDER[] = {"NOTE", "PLAY"};
 static const char *const N_CLOCK[] = {"INT", "USB", "TRS"};
 static const char *const N_MIDI_INPUT[] = {"USB", "TRS"};
-/* MIDI IN (seq.c midi_base): 1..4 -> parts, 5..16 ignored / all -> selected / (1.2, append-only) 5..8, 9..12, 13..16 -> parts
- * / (1.5.5, #202) TRACK: each track its own channel (song.mch, MENU > MIDI > T1..T4 CHANNEL) */
-static const char *const N_ROUTE[] = {"CH1-4", "SEL", "CH5-8", "CH9-12", "CH13-16", "TRACK"};
+/* MIDI IN (seq.c midi_base): 1..6 -> parts 1..6, 7..16 ignored / all -> selected / 7..12 -> parts 1..6
+ * / (1.5.5, #202) TRACK: each track its own channel (song.mch, MENU > MIDI > T1..T6 CHANNEL) */
+static const char *const N_ROUTE[] = {"CH1-6", "SEL", "CH7-12", "TRACK"};
 static const char *const N_NOTE[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 static const char *const N_DASH[] = {"--"};
 static const char *const N_RTYPE[] = {"ROOM", "SPRING", "HALL"};   /* G_RTYPE: the reverb bus's model (fx.c) */
@@ -67,9 +67,10 @@ static const char *const N_IRATE[] = {"689", "919", "1.1k", "1.4k", "1.8k", "2.2
 /* modulation matrix (mod.c): sources, destinations (E1..E8 = P_E0..P_E7: shown with the engine's labels).
  * Append-only (stored values keep their meaning): S&H SLEW and DEPTH (#132) came after EXPR and E8; VEL and TIME
  * (1.5.6, #213: at the note) after DEPTH */
-static const char *const N_MSRC[] = {"OFF", "LFO", "ENV", "VEL", "KEY", "RAND", "MODW", "AT", "EXPR", "S&H", "SLEW"};
-static const char *const N_MDST[] = {"OFF", "PITCH", "CUT", "SHP", "AMP", "PAN", "DIST", "CHO", "DLY", "REV", "RATE",
-                                     "VIB", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "DEPTH", "VEL", "TIME"};
+static const char *const N_MSRC[] = {"OFF", "1LFO", "ENV", "VEL", "KEY", "RAND", "MODW", "AT", "EXPR", "S&H", "SLEW", "2LFO"};
+static const char *const N_MDST[] = {"OFF", "PITCH", "CUT", "SHP", "AMP", "PAN", "DIST", "CHO", "DLY", "REV", "1RATE",
+                                     "VIB", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "1AMT", "VEL", "TIME",
+                                     "ATK", "DEC", "SUS", "REL", "2RATE", "1FADE"};
 /* 1.8: AFTERTOUCH SENS, the keys' pressure (keytouch.c): OFF (the keys send none; the routing still takes MIDI's), 1 the
  * firmest lean for full pressure .. 10 the lightest */
 static const char *const N_ATSNS[] = {"OFF", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
@@ -83,7 +84,7 @@ static const char *const N_ENGNAME[] = {"ANALOG", FELUCCA_FM4 ? "DIGITAL" : "-",
 #endif
 };
 
-static const char *const N_SLOT[] = {"A", "B", "C", "D", 0};   /* G_SLOT 1..4 (F_INT: the names split its range) */
+static const char *const N_SLOT[] = {"A", "B", "C", "D", "E", 0};   /* G_SLOT 1..4 (F_INT: the names split its range) */
 #define PD(l, f, mn, mx, df) {l, f, mn, mx, df, 0, 0}
 #define PE(l, n, df) {l, F_ENUM, 0, (int16_t)(sizeof(n) / sizeof(n[0]) - 1), df, n, 0}
 
@@ -96,9 +97,9 @@ static const param_desc_t TP[P_COUNT] = {
     [P_ED_FLT] = PD("FLT", F_BIPCT, -64, 63, 0),
     [P_ED_PIT] = PD("PIT", F_BIPCT, -64, 63, 0),
     [P_ED_SHP] = PD("SHP", F_BIPCT, -64, 63, 0),
-    [P_ED_FX] = PD("FX", F_BIPCT, -64, 63, 0),
-    [P_LRATE] = PD("RATE", F_LFOHZ, 0, 127, 60),
-    [P_LWAVE] = PE("WAVE", N_LWAVE, 0),
+    [P_SOFF]  = PD("ROTA", F_INT, -32, 32, 0),
+    [P_LRATE] = PD("RATE", F_LFOHZ, 0, 127, 78),
+    [P_LWAVE] = PE("WAVE", N_LWAVE, 5),
     [P_LPHASE] = PD("PHS", F_INT, 0, 127, 0),
     [P_LFADE] = PD("FADE", F_TIME, 0, 127, 0),
     [P_LD_PIT] = PD("PIT", F_BIPCT, -64, 63, 0),
@@ -160,7 +161,7 @@ static const param_desc_t TP[P_COUNT] = {
 #undef LANE
     [P_LSYNC] = PE("SYNC", N_LSYNC, 0),
     [P_LTRIG] = PE("TRIG", N_LTRIG, 0),
-    [P_LPOL] = PE("POL", N_LPOL, 0),
+    [P_LPOL] = PE("POL", N_LPOL, 1),
     [P_SQNT] = PE("QNTZ", N_ONOFF, 1),            /* ON: every step on its start, as before 1.2 */
     [P_SPRD] = PD("SPRD", F_PCT, 0, 127, 0),      /* #148: 0 = every voice on PAN, as before (fx.c mix_spread) */
     /* the INSERT (1.5, fx.c track_insert): TYPE OFF = as before. A B C as the editor protocol names them; the device
@@ -177,6 +178,12 @@ static const param_desc_t TP[P_COUNT] = {
     [P_ATSNS] = PE("AT", N_ATSNS, 0),
     [P_ATDST] = PE("ATDST", N_MDST, 0),
     [P_ATAMT] = PD("ATAMT", F_BIPCT, -64, 63, 0),
+    /* 2LFO: phase always 0, pol always UNI */
+    [P_L2RATE] = PD("RATE", F_LFOHZ, 0, 127, 57),
+    [P_L2WAVE] = PE("WAVE", N_LWAVE, 1),
+    [P_L2SYNC] = PE("SYNC", N_LSYNC, 0),
+    [P_L2TRIG] = PE("TRIG", N_LTRIG, 0),
+    [P_SOFF] = PD("ROTA", F_INT, -32, 32, 0),  /* loop phase offset (TRACKS K3; steps; 0 = normal start) */
 };
 
 /* the INSERT's A B C as its TYPE means them (TP's ranges and defaults): the drives DRIVE TONE LEVEL, CRUSH BITS RATE
@@ -202,12 +209,12 @@ static const param_desc_t GP[G_COUNT] = {
     [G_TUNE] = PD("TUNE", F_INT, -50, 50, 0),     /* cents; edited on MENU > AUDIO TUNE (1.2: menu_items.c MI_TUNE) */
     [G_DTIME] = PE("TIME", N_DTIME, 1),
     [G_DFDBK] = PD("FDBK", F_PCT, 0, 120, 60),
-    [G_DCOLOR] = PD("COLR", F_PCT, 0, 127, 70),
-    [G_DMIX] = PD("MIX", F_PCT, 0, 127, 90),
-    [G_RSIZE] = PD("SIZE", F_PCT, 0, 127, 90),
-    [G_RDAMP] = PD("DAMP", F_PCT, 0, 127, 60),
-    [G_CRATE] = PD("CRT", F_LFOHZ, 0, 127, 40),
-    [G_CDEPTH] = PD("CDP", F_PCT, 0, 127, 60),
+    [G_DCOLOR] = PD("COLR", F_PCT, 0, 127, 64),
+    [G_DMIX] = PD("MIX", F_PCT, 0, 127, 64),
+    [G_RSIZE] = PD("SIZE", F_PCT, 0, 127, 64),
+    [G_RDAMP] = PD("DAMP", F_PCT, 0, 127, 64),
+    [G_CRATE] = PD("CRT", F_LFOHZ, 0, 127, 42),
+    [G_CDEPTH] = PD("CDP", F_PCT, 0, 127, 64),
     /* G_MIDI, G_SYNC, G_INFO: the old SYSTEM page's (gone in 1.2), on no page: MIDI's value was never read (its card
      * showed the USB state), SYNC was a placeholder, CPU a reading; the USB state and the CPU load are MENU > SYSTEM >
      * INFO's now (ui_menu.c). Kept: the ids and G_COUNT are fixed by the formats and the protocol */
@@ -217,7 +224,7 @@ static const param_desc_t GP[G_COUNT] = {
      * stored with the project as before. (was "--": stored 0 = CH1-4, as MIDI IN always was) */
     [G_ROUTE] = PE("ROUT", N_ROUTE, 0),
     [G_INFO] = PD("CPU", F_INT, 0, 0, 0),
-    [G_SLOT] = {"SLOT", F_INT, 1, 4, 1, N_SLOT, 0},   /* 1.8: A..D as the list, the header and SONG (values 1..4) */
+    [G_SLOT] = {"SLOT", F_INT, 1, 5, 1, N_SLOT, 0},   /* 1.8: A..D as the list, the header and SONG (values 1..4) */
     [G_NAME] = PE("NAME", N_DASH, 0),
     [G_LOAD] = PE("LOAD", N_GO, 0),
     [G_SAVE] = PE("SAVE", N_GO, 0),
@@ -446,7 +453,8 @@ enum { FAM_HOME, FAM_ENV, FAM_LFO, FAM_FX, FAM_SCL, FAM_EDIT, FAM_GLO, FAM_SAVE,
 enum { SC_TRACK, SC_GLOBAL, SC_ENGINE, SC_STEP, SC_TRK };   /* SC_TRK: the TRACKS page (ui_input.c tracks_edit) */
 enum { GR_NONE, GR_ADSR, GR_LFO, GR_STEPS, GR_ARP, GR_SCALE, GR_FX, GR_ROLL, GR_BROWSE, GR_SLOTS, GR_USER, GR_TRK,
        GR_SLCR, GR_MOD, GR_PATS, GR_SONG, GR_TOOLS, GR_CHORD, GR_SLICES, GR_EVENTS,
-       GR_FMOP, GR_FMOP2, GR_FMENV, GR_INS };   /* (GR_STEPS: SEQ TOOLS' knobs; GR_FMOP..: FM6's operator pages, ui_fm6op.c) */
+       GR_FMOP, GR_FMOP2, GR_FMENV, GR_INS,
+       GR_HOME_TRK };   /* (GR_STEPS: SEQ TOOLS' knobs; GR_FMOP..: FM6's operator pages, ui_fm6op.c; GR_HOME_TRK: TRACKS page) */
 
 typedef struct {
     const char *title;
@@ -458,9 +466,10 @@ static const page_t PAGES[] = {
     {"ENV", FAM_ENV, SC_TRACK, GR_ADSR, {P_ATK, P_DEC, P_SUS, P_REL}},
     {"ENV DEST", FAM_ENV, SC_TRACK, GR_NONE, {P_ED_FLT, P_ED_PIT, P_ED_SHP, P_ESYNC}},   /* (P_ED_FX: nothing reads it);
                                                                              * 1.5: ESYNC, ENV's times as note values */
-    {"LFO", FAM_LFO, SC_TRACK, GR_LFO, {P_LRATE, P_LWAVE, P_LPHASE, P_LFADE}},
-    {"LFO 2", FAM_LFO, SC_TRACK, GR_LFO, {P_LSYNC, P_LTRIG, P_LPOL, 0xFF}},   /* 1.2: SYNC TRIG POL */
-    {"LFO DEST", FAM_LFO, SC_TRACK, GR_NONE, {P_LD_PIT, P_LD_FLT, P_LD_SHP, P_LD_AMP}},
+    {"1LFO", FAM_LFO, SC_TRACK, GR_LFO, {P_LRATE, P_LWAVE, P_LFADE, 0xFF}},
+    {"1LFO 2", FAM_LFO, SC_TRACK, GR_LFO, {P_LSYNC, P_LTRIG, P_LPOL, 0xFF}},
+    {"1LFO AMT", FAM_LFO, SC_TRACK, GR_NONE, {P_LD_PIT, P_LD_FLT, P_LD_SHP, P_LD_AMP}},
+    {"2LFO", FAM_LFO, SC_TRACK, GR_LFO, {P_L2RATE, P_L2WAVE, P_L2SYNC, P_L2TRIG}},
     {"MOD", FAM_LFO, SC_TRACK, GR_MOD, {0xFF, P_M1SRC, P_M1DST, P_M1AMT}},   /* KNOB 1: the slot (mod_ui_slot) */
     {"FX", FAM_FX, SC_TRACK, GR_FX, {P_DIST, P_CHOR, P_DLY, P_REV}},
     {"SLICER", FAM_FX, SC_TRACK, GR_SLCR, {P_SLCR, P_SLPAT, P_SLRATE, P_SLDEPTH}},
@@ -505,10 +514,10 @@ static const page_t PAGES[] = {
                                                              * (ui.c detail_on, ui_input.c sd_turn) */
     {"AUTOMATION", FAM_SEQ, SC_TRACK, GR_EVENTS, {0xFF, 0xFF, 0xFF, 0xFF}},  /* the locks, events, CHANCE and RATCH as a
                                                                              * list, PLAY and CLEAR (ui_events.c) */
-    /* HOME's pages (1.2): HOME tapped on HOME the MIXER (up to 1.1.5 GLO's; LEVEL PAN REV MUTE), again CLOCK (up to 1.1.5
-     * GLO > GLOBAL; its TUNE is MENU > AUDIO's now), again HOME (ui.c home_tap) */
-    {"MIXER", FAM_TRK, SC_TRK, GR_TRK, {0, 1, 2, 3}},
-    {"CLOCK", FAM_TRK, SC_GLOBAL, GR_NONE, {G_BPM, G_SWING, G_CLOCK, 0xFF}},
+    {"CLOCK", FAM_SEQ, SC_GLOBAL, GR_NONE, {G_BPM, G_SWING, G_CLOCK, 0xFF}},
+    /* HOME's pages: MIXER (track-level controls), TRACKS (all tracks as rows), TWIDDLE (HOME screen); HOME cycles all three */
+    {"MIXER",  FAM_TRK, SC_TRK,     GR_TRK,      {0, 1, 2, 3}},
+    {"TRACKS", FAM_TRK, SC_TRK,     GR_HOME_TRK, {0, 1, 2, 3}},
 };
 #define NPAGES (sizeof(PAGES) / sizeof(PAGES[0]))
 static uint8_t mod_ui_slot;      /* the MOD page: the matrix slot (0..3) KNOB 2..4 edit */

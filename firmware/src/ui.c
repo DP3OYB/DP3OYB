@@ -94,10 +94,8 @@ static uint32_t up_gen;                      /* bumped on every user bank change
 enum { SEL_BPM, SEL_PAGE, SEL_MODW, SEL_VEL, SEL_N };
 static uint32_t sel_mode(void) { return ((ui_prefs2 >> 4) & 1u) | ((ui_prefs2 >> 5) & 2u); }
 /* 1.3 (Discussions #112, #134): MENU > DISPLAY > HOME, what the HOME page shows under its four cards: 0 SCOPE (the
- * oscilloscope, as before), 1 TRACKS (the four tracks as rows: ui_graph.c draw_home_tracks), 2 LEVELS (1.5, #134: the
- * rows of TRACKS, and KNOB 1..4 the LEVEL of T1..T4 in place of the engine's four: home_param). A byte of its own no
- * engine uses, saved with the settings; 0 in older settings = SCOPE; an unknown value (a later firmware's view) reads as
- * SCOPE and is kept as saved (1.3 / 1.4 read LEVELS so) */
+ * the track rows (TRACKS, the default: 0), or the oscilloscope (SCOPE: 1). A byte of its own no engine uses, saved
+ * with the settings; 0 = TRACKS (the default); an unknown value reads as TRACKS */
 #define ui_home_view (favorites.factory[15][26])
 /* 1.5.6 (#212): MENU > DISPLAY > LEDS INV LO / INV HI: INV with the idle LEDs at the steady mid level (ui_input.c
  * ui_leds) instead of lit. The mode stays INV (settings_leds, panel.c: so firmware before 1.5.6 reads plain INV) and
@@ -105,9 +103,9 @@ static uint32_t sel_mode(void) { return ((ui_prefs2 >> 4) & 1u) | ((ui_prefs2 >>
  * Saved with the settings; read only while LEDS is INV (menu_items.c leds_row) */
 #define ui_leds_inv (favorites.factory[15][25])
 static uint32_t leds_inv(void) { return settings_leds == LEDS_INV && ui_leds_inv - 1u < 2u ? ui_leds_inv : 0u; }
-enum { HV_SCOPE, HV_TRACKS, HV_LEVELS, HV_COUNT };
-static int home_tracks(void) { return ui_home_view == HV_TRACKS || ui_home_view == HV_LEVELS; }
-static int home_levels(void) { return ui_home_view == HV_LEVELS; }
+enum { HV_TRACKS, HV_SCOPE, HV_COUNT };
+static int home_tracks(void) { return ui_home_view != HV_SCOPE; }
+static int home_levels(void) { return 0; }
 enum { RP_CLICK, RP_LEVEL, RP_COUNTIN };
 static uint32_t rp_get(uint32_t f)                     /* a field as the MENU steps it: 0..2 */
 {
@@ -201,6 +199,8 @@ static struct {
     uint8_t ly;                  /* the layer whose button is down (LAYER_*), 0 = none */
     uint8_t layer;               /* the layer whose map is shown (LAYER_*), 0 = none */
     uint8_t lock;                /* #83: the layer locked open by a double tap (LAYER_*), 0 = none (ui_layer.c) */
+    uint8_t lock_restored;      /* set by layer_lock when it restores navigation state; open_family skips advance once */
+    uint8_t home_locked;        /* layer just locked via double-tap: home_tap skips navigation, page already restored */
     uint16_t pg_down;            /* page buttons down (panel ids) that act when let go */
     uint32_t layer_sig;          /* drawn-state cache of the map */
     char msg[24];
@@ -392,11 +392,11 @@ static uint32_t large_kind(void)
         return LK_OFF;
     if (ui.layer)
         return LK_LABEL;
-    if (ui.home)                                        /* (HOME > TRACKS: its rows need the panel, the cards as on */
-        return home_tracks() ? LK_LABEL : LK_TALL;      /* a list page; the rows' names in M: draw_home_tracks) */
+    if (ui.home)                                        /* TWIDDLE: LEVELS rows need the panel; SCOPE is tall */
+        return home_tracks() ? LK_LABEL : LK_TALL;
     g = cur_page()->graph;
     return g == GR_BROWSE || g == GR_SLOTS || g == GR_USER || g == GR_PATS || g == GR_SONG || g == GR_ROLL ||
-           g == GR_SLICES || g == GR_EVENTS ? LK_LABEL : LK_TALL;
+           g == GR_SLICES || g == GR_EVENTS || g == GR_HOME_TRK ? LK_LABEL : LK_TALL;
 }
 /* the geometry of the page shown: the cards' height, the panel's top and height */
 static uint32_t card_h(void) { return large_kind() == LK_TALL ? LG_CARD_H : CARD_H; }
@@ -773,7 +773,7 @@ static void note_name(char *b, uint32_t n)
  * and SYSTEM in 1.2), or not shown for this track, gives the family's first */
 static void open_family(uint32_t fam)
 {
-    if (!ui.home && cur_page()->fam == fam) {          /* same button again: next page */
+    if (!ui.home && cur_page()->fam == fam && !ui.lock_restored) {  /* same button again: next page */
         uint32_t n, i = ui.page;
         for (n = 0; n < NPAGES; n++) {
             i = (i + 1u) % NPAGES;
@@ -789,6 +789,7 @@ static void open_family(uint32_t fam)
         uint32_t i = ui.fam_last[fam];
         ui.page = (uint8_t)(i && i < NPAGES && PAGES[i].fam == fam && page_visible(i) ? i : page_first(fam));
     }
+    ui.lock_restored = 0;
     ui.fam_last[fam] = ui.page;
     ui.home = 0;
     page_entered();
@@ -805,19 +806,37 @@ static void go_home(void)
     help_start();
 }
 
-/* HOME tapped (1.2): HOME -> MIXER (up to 1.1.5 GLO's first page) -> CLOCK (up to 1.1.5 GLO > GLOBAL) -> HOME; from any
- * other page HOME. HOME's pages are FAM_TRK's, in PAGES order, always from the first (none remembered). Held: the menu
- * (ui_input) */
+/* HOME tapped: cycles MIXER -> TRACKS -> TWIDDLE -> MIXER when already on a HOME page; otherwise returns to the
+ * last visited HOME page (MIXER, TRACKS, or TWIDDLE), just as any other family button returns to its last page.
+ * fam_last[FAM_TRK] = 0xFF means TWIDDLE was last. Held: the menu (ui_input) */
 static void home_tap(void)
 {
     uint32_t i = ui.page + 1u;
-    if (ui.home) {
-        ui.fam_last[FAM_TRK] = 0;                     /* (open_family: the family's first, the MIXER) */
-        open_family(FAM_TRK);
+    if (ui.home_locked) {                             /* layer just locked: page restored by layer_lock, don't cycle */
+        ui.home_locked = 0;
+        return;
+    }
+    if (ui.home) {                                    /* on TWIDDLE: advance to MIXER */
+        ui.page = (uint8_t)page_first(FAM_TRK);
+        ui.fam_last[FAM_TRK] = ui.page;
+        ui.home = 0;
+        page_entered();
     } else if (cur_page()->fam == FAM_TRK && i < NPAGES && PAGES[i].fam == FAM_TRK) {
-        open_family(FAM_TRK);                         /* (on HOME's page again: the next one) */
-    } else {
+        open_family(FAM_TRK);                         /* on MIXER: advance to TRACKS */
+    } else if (cur_page()->fam == FAM_TRK) {
+        ui.fam_last[FAM_TRK] = 0xFFu;                /* on TRACKS: go to TWIDDLE, remember it */
         go_home();
+    } else {                                          /* from another section: return to last HOME page */
+        uint32_t last = ui.fam_last[FAM_TRK];
+        if (last == 0xFFu) {
+            go_home();
+        } else {
+            if (!last || last >= NPAGES || PAGES[last].fam != FAM_TRK || !page_visible(last))
+                last = page_first(FAM_TRK);
+            ui.page = (uint8_t)last;
+            ui.home = 0;
+            page_entered();
+        }
     }
 }
 
@@ -840,6 +859,7 @@ static void page_turn(int32_t dir)
         return;
     i = ring[(at + (dir > 0 ? 1u : m - 1u)) % m];
     if (i == 0xFFu) {
+        ui.fam_last[fam] = 0xFFu;
         go_home();
         return;
     }

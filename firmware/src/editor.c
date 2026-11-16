@@ -587,18 +587,18 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         ed_b(TSEL->preset);
         break;
     }
-    case ED_PROJECT:                                       /* 0 = load, 1 = save, 2 = query; slot 0..3 */
-        if (na < 2u || a[0] > 2u || a[1] >= 4u)
+    case ED_PROJECT:                                       /* 0 = load, 1 = save, 2 = query; slot 0..4 */
+        if (na < 2u || a[0] > 2u || a[1] >= CHAIN_SILENT)
             return;
         if (a[0] == 1u) {
             if (ed_flash_stop() || project_save(a[1]))
                 return;                              /* the legacy reply has no failure bit: do not confirm a failed save */
         }
         else if (a[0] == 0u)
-            project_load(a[1] & 3u);
+            project_load(a[1] % CHAIN_SILENT);
         ed_b(a[0]);
-        ed_b(a[1] & 3u);
-        ed_b(project_used(a[1] & 3u));
+        ed_b(a[1] % CHAIN_SILENT);
+        ed_b(project_used(a[1] % CHAIN_SILENT));
         break;
     case ED_NAMES:                                         /* preset names of an engine */
         if (na < 1u || a[0] >= NENGINES)
@@ -886,7 +886,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
                     if (lanes) {
                         memcpy(c.row[i].slot, r, NTRK);
                         c.row[i].repeat = r[NTRK];
-                    } else if (r[0] < 4u)       /* (a row of one slot: all four tracks on it) */
+                    } else if (r[0] < CHAIN_SILENT)   /* (a row of one slot: all four tracks on it) */
                         c.row[i] = chain_row_of(r[0], r[1]);
                     else
                         c.row[i].repeat = 0;    /* (invalid) */
@@ -904,7 +904,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
             if (lanes)
                 for (k = 0; k < NTRK; k++) ed_b(r->slot[k]);
             else                                         /* v6: the clock track's slot (every track "-": A) */
-                ed_b(r->slot[chain_clock(r)] < 4u ? r->slot[chain_clock(r)] : 0u);
+                ed_b(r->slot[chain_clock(r)] < CHAIN_SILENT ? r->slot[chain_clock(r)] : 0u);
             ed_b(r->repeat);
         }
         break;

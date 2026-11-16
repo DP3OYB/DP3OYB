@@ -48,6 +48,9 @@ static int8_t held_dt[NTRK][16];
 static volatile uint8_t kb_asleep;       /* MENU > SCREEN OFF (ui.c): the screen dark or waking, a key pressed now only
                                           * wakes it (silent, no layer, its release nothing) */
 static uint8_t last_note = 60;
+static uint8_t kb_hold[NTRK];           /* double-tap OCT+: note hold per track — key-off deferred until hold is turned off */
+static uint32_t kb_hold_on(uint32_t c) { return c < NTRK ? kb_hold[c] : 0u; }
+static uint32_t kb_held_mask;           /* keys whose note-off is deferred by hold mode (bit per key) */
 static volatile uint8_t transport_req;   /* 1 start, 2 stop, 3 restart (from the UI) */
 static volatile uint8_t panic_req;       /* bit per track: release every sounding note (preset / engine change) */
 static volatile uint8_t clock_lost;      /* 1.8: an external clock (G_CLOCK 1 USB, 2 TRS) stopped coming: the play
@@ -59,13 +62,13 @@ static volatile uint8_t midi_seen;       /* 1.5.5 (#208): bit per track, a MIDI 
 
 static uint32_t trk_index(const track_t *t) { return (uint32_t)(t - trk); }
 
-/* MENU > MIDI > MIDI IN (G_ROUTE, up to 1.1.5 GLO > SYSTEM ROUT): the first channel (0..15) of the block of four that
- * plays tracks 1..4, -1 with SEL, -2 with TRACK (each track its own: song.mch). Stored
- * 0 CH1-4, 1 SEL, then (1.2, Discussion #143) 2 CH5-8, 3 CH9-12, 4 CH13-16, (1.5.5, #202) 5 TRACK */
+/* MENU > MIDI > MIDI IN (G_ROUTE, up to 1.1.5 GLO > SYSTEM ROUT): the first channel (0..15) of the block of six that
+ * plays tracks 1..6, -1 with SEL, -2 with TRACK (each track its own: song.mch). Stored
+ * 0 CH1-6, 1 SEL, 2 CH7-12, 3 TRACK */
 static int32_t midi_base(void)
 {
     uint32_t r = (uint32_t)song.g[G_ROUTE];
-    return r == ROUTE_SEL ? -1 : r == ROUTE_TRACK ? -2 : r ? (int32_t)(r - 1u) * 4 : 0;
+    return r == ROUTE_SEL ? -1 : r == ROUTE_TRACK ? -2 : r ? (int32_t)(r - 1u) * 6 : 0;
 }
 /* MIDI channel 0..15 of track i (keys -> MIDI out): its channel in ROUT's block (SEL, CH1-4: 1..4); TRACK its own (OMNI,
  * OFF: as CH1-4) */
@@ -788,6 +791,20 @@ static void key_off(uint32_t k, track_t *t)
     }
 }
 
+/* double-tap OCT+ note hold: release all deferred notes and toggle. Called from ui_input.c */
+static void kb_hold_toggle(void)
+{
+    uint32_t k, sel = song.sel % NTRK;
+    kb_hold[sel] ^= 1u;
+    if (!kb_hold[sel]) {
+        for (k = 0; k < 27u; k++)
+            if ((kb_held_mask >> k) & 1u && kb_trk[k] % NTRK == sel) {
+                key_off(k, &trk[sel]);
+                kb_held_mask &= ~(1u << k);
+            }
+    }
+}
+
 #ifdef FM1_INPUT_LAT
 /* the press latency stats (bsp/boards/fm1/fm1_input.h fm1_in_stat, console `inp`): from the first scan that saw
  * key k closed to its note-on here, and to the note's first sample leaving the DMA (kb_out_tick:
@@ -830,6 +847,7 @@ static void keyboard_block(void)
             continue;
         if ((cur >> k) & 1u) {                    /* the selected track; the key-up goes to the same one */
             kb_trk[k] = song.sel;
+            kb_held_mask &= ~(1u << k);            /* re-press: cancel any deferred hold on this key */
             if (kb_asleep) {                      /* (SCREEN OFF: the wake press is swallowed) */
                 kb_note[k] = KB_SILENT;
                 continue;
@@ -861,6 +879,10 @@ static void keyboard_block(void)
             }
             if (kb_note[k] == KB_SILENT)
                 continue;
+            if (kb_hold[kb_trk[k] % NTRK]) {      /* hold mode: defer note-off until hold is toggled off */
+                kb_held_mask |= 1u << k;
+                continue;
+            }
             key_off(k, &trk[kb_trk[k] % NTRK]);
         }
     }
@@ -899,8 +921,12 @@ static void seq_start(void)
     chain_start();
     for (i = 0; i < NTRK; i++) {                   /* every track from its step 0, together */
         track_t *t = &trk[i];
-        t->seq_idx = (uint16_t)(t->p[P_SLEN] - 1);
-        t->seq_pos = 0x7FFFFFFF;                   /* step 0 fires on the first block */
+        {
+            uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP);
+            int32_t off = (int32_t)t->p[P_SOFF] % (int32_t)len;
+            t->seq_idx = (uint16_t)(((int32_t)len - 1 + off + (int32_t)len) % (int32_t)len);
+        }
+        t->seq_pos = 0x7FFFFFFF;                   /* step (SOFF) fires on the first block */
         t->rskip_n = 0;
         t->rh_n = 0;
         t->rat_left = 0;

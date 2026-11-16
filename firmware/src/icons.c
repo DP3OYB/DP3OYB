@@ -190,7 +190,7 @@ static uint32_t param_icon(const param_desc_t *d, int32_t v)
         for (i = 0; i < sizeof(WAVE_ICON) / sizeof(WAVE_ICON[0]); i++)
             if (str_eq(d->names[v], WAVE_ICON[i].label))
                 return WAVE_ICON[i].icon;
-    if (d == &TP[P_LWAVE])
+    if (d == &TP[P_LWAVE] || d == &TP[P_L2WAVE])
         return ICON_LFO_WAVE;                 /* "WAVE" is also the oscillator wave */
     if (d == &TP[P_ARATE] || d == &TP[P_SLRATE])
         return ICON_DIVISION;                 /* arp / SLICER RATE is a note division, not Hz */
@@ -219,7 +219,7 @@ static uint32_t param_icon(const param_desc_t *d, int32_t v)
 static uint32_t mod_src_icon(int32_t s)
 {
     static const uint8_t I[MS_N] = {ICON_MOD, ICON_LFO_WAVE, ICON_ENV, ICON_ACCENT, ICON_KEYTRACK, ICON_PROB,
-                                    ICON_MOD, ICON_MIDI, ICON_LEVEL, ICON_W_SH, ICON_GLIDE};
+                                    ICON_MOD, ICON_MIDI, ICON_LEVEL, ICON_W_SH, ICON_GLIDE, ICON_LFO_WAVE};
     return I[clamp(s, 0, MS_N - 1)];
 }
 static uint32_t mod_dst_icon(const track_t *t, int32_t d)
@@ -229,6 +229,10 @@ static uint32_t mod_dst_icon(const track_t *t, int32_t d)
     uint32_t id;
     d = clamp(d, 0, MD_N - 1);
     if (d == MD_DEPTH)
+        return ICON_LFO_WAVE;
+    if (d == MD_RATE2)
+        return ICON_RATE;
+    if (d == MD_FADE)
         return ICON_LFO_WAVE;
     if (d >= MD_VEL)                                   /* (1.5.6: VEL, TIME) */
         return d == MD_VEL ? ICON_ACCENT : ICON_TIME;

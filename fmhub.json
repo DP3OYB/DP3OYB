@@ -1,0 +1,6 @@
+{
+  "what": "A 6-track performance groovebox that's both versatile and intuitive to use. Based on Felucca, DP3OYB optimizes for letting you create what you want, whenever you want, without the box getting in the way.",
+  "author": "powerofyourbrains",
+  "kinds": "groove",
+"sounds": "licensed: Felucca (github.com/hugelton/Felucca), GPL-3.0"
+}

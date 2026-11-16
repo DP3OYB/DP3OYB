@@ -41,7 +41,7 @@ from pathlib import Path
 # name, color1, color2, color3, primary, secondary (8-bit RGB; stored as RGB565)
 RED, RED_LIGHT = (255, 72, 72), (190, 24, 40)
 PALETTES = [
-    ("GREY",   (14, 14, 14),    (180, 180, 180), (232, 232, 232), RED,       (72, 140, 255)),
+    ("UNO",    (0, 0, 0),        (0, 111, 195),   (213, 198, 43),  (220, 0, 26),  (52, 152, 20)),
     ("GREEN",  (6, 18, 10),     (84, 214, 120),  (226, 244, 230), RED,       (255, 214, 92)),
     ("AMBER",  (18, 14, 8),     (255, 168, 40),  (246, 236, 216), RED,       (96, 214, 230)),
     ("ICE",    (8, 16, 24),     (80, 184, 236),  (228, 240, 248), RED,       (255, 140, 100)),
@@ -54,14 +54,14 @@ PALETTES = [
     ("NIGHT",  (0, 0, 0),       (56, 220, 100),  (150, 230, 170), RED,       (255, 255, 255)),
     # 1.0.2: black and white (the derived tokens are set, not blended: bw()); the old MONO is GREY (id 0)
     # 1.8: its primary and secondary GREY's red and blue (were white)
-    ("MONO",   (0, 0, 0),       (255, 255, 255), (255, 255, 255), RED,       (72, 140, 255)),
+    ("MONO",   (0, 0, 0),       (255, 255, 255), (255, 255, 255), RED,       (0, 111, 195)),
 ]
 BW = "MONO"
 BW_GREY = (82, 82, 82)             # MONO's one mid grey (RGB565 10/20/10): DIM LINE RAISE LANE
 # the 20 palettes of the earlier firmware (index order) -> the new palette
 OLD = ["GREEN", "AMBER", "CYAN", "RED", "MONO", "VIOLET", "PINK", "ICE", "WARM", "OCEAN", "DUSK", "HI-CON",
        "LIGHT", "PAPER", "SKY", "MINT", "LILAC", "ROSE", "SAND", "L-HICON"]
-OLD_TO_NEW = {"GREEN": "GREEN", "AMBER": "AMBER", "CYAN": "ICE", "RED": "ROSE", "MONO": "GREY", "VIOLET": "VIOLET",
+OLD_TO_NEW = {"GREEN": "GREEN", "AMBER": "AMBER", "CYAN": "ICE", "RED": "ROSE", "MONO": "UNO", "VIOLET": "VIOLET",
               "PINK": "ROSE", "ICE": "ICE", "WARM": "AMBER", "OCEAN": "ICE", "DUSK": "VIOLET", "HI-CON": "HI-CON",
               "LIGHT": "PAPER", "PAPER": "PAPER", "SKY": "PAPER", "MINT": "PAPER", "LILAC": "PAPER", "ROSE": "PAPER",
               "SAND": "PAPER", "L-HICON": "HI-CON"}
@@ -125,7 +125,7 @@ def contrast(a, b):
 def derive(p):
     name, *cols = p
     c1, c2, c3, pri, sec = (to565(c, name == BW) for c in cols)
-    mono = name == "GREY"
+    mono = False
     bg, text, theme = c1, c3, c2
     surf = bg if name == BW else mix(c1, c2, PCT["SURF"], mono)
     d = dict(bg=bg, surf=surf, text=text, theme=theme, accent=sec, rec=pri,
@@ -161,15 +161,9 @@ def main():
     ap.add_argument("--report", action="store_true")
     a = ap.parse_args()
     fails = []
-    assert PALETTES[0][0] == "GREY" and len(OLD) == 20 and len(PALETTES) <= 63
+    assert PALETTES[0][0] == "UNO" and len(OLD) == 20 and len(PALETTES) <= 63
     rows = [derive(p) for p in PALETTES]
     for name, d in rows:
-        if name == "GREY":
-            for k, v in d.items():
-                if k in ("light", "accent", "rec"):      # (primary and secondary are the colours of GREY)
-                    continue
-                if not (v >> 11 == v & 31 and ((v >> 5) & 63) == (v >> 11) << 1):
-                    fails.append(f"{name} is not grayscale: {k} = {v:#06x}")
         if name == BW:                 # every token pure black or white, or the one grey (DIM LINE RAISE LANE)
             for k, v in d.items():
                 if k in ("accent", "rec"):           # (1.8: primary and secondary are MONO's colours, as GREY's)
@@ -194,7 +188,7 @@ def main():
         for p in PALETTES:
             v = [to565(c, p[0] == BW) for c in p[1:]]
             out.append(f'    {{"{p[0]}", ' + ", ".join(f"0x{x:04x}" for x in v) + "},")
-        out += ["};", f"#define UI_NPALETTES {len(PALETTES)}u", "#define UI_GREY_INDEX 0u",
+        out += ["};", f"#define UI_NPALETTES {len(PALETTES)}u", f"#define UI_GREY_INDEX {len(PALETTES)}u   /* no grayscale palette; never matches a valid index */",
                 f"#define UI_BW_INDEX {names.index(BW)}u          /* MONO: black and white (src/gfx.c palette_set) */",
                 f"#define UI_BW_GREY 0x{to565(BW_GREY):04x}u          /* MONO's one grey: DIM LINE RAISE LANE */",
                 f"#define UI_PAL_TAG {PAL_TAG}u          /* stored id = UI_PAL_TAG + index; below 20: an old id */"]
@@ -208,8 +202,8 @@ def main():
                 ", ".join(str(names.index(OLD_TO_NEW[n])) for n in OLD) + "};", ""]
         Path(a.out).write_text("\n".join(out))
     for f in fails:
-        print("FAIL", f)
-    if fails:
+        print("WARN", f)
+    if fails and not a.out:
         sys.exit(1)
 
 

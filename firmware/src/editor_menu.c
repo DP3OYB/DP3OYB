@@ -34,6 +34,7 @@ static const uint8_t ED_MENU[][2] = {
     {MI_SELECT, 25},                                   /* 1.5.5 (Discussion #188): SELECT BPM / PAGE, CONTROL */
     {MI_TCH1, 26}, {MI_TCH2, 27}, {MI_TCH3, 28}, {MI_TCH4, 29},   /* 1.5.5 (#202): T1..T4 CHANNEL, the project's (song.mch)
                                                        * as MIDI IN: 1..16 OMNI OFF (values 0..17), MIDI */
+    {MI_TCH5, 33}, {MI_TCH6, 34},                      /* T5..T6 CHANNEL, the project's (song.mch[4..5]), MIDI */
     {MI_MFOLLOW, 30},                                  /* 1.5.5 (#208): AUTO SELECT OFF / ON, a setting, MIDI */
     {MI_SCRWAKE, 31},                                  /* 1.5.5: SCREEN WAKE +MIDI / PANEL, a setting, MIDI */
 #if FELUCCA_CPU2

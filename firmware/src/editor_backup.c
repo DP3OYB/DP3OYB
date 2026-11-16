@@ -38,7 +38,7 @@ static const uint8_t *ed_bk_object(uint32_t id, uint32_t *len)
     if (id == 1u) { *len = sizeof ed_bk_settings; return (const uint8_t *)&ed_bk_settings; }
     if (id >= 2u && id <= 5u) {
         if (project_used(id - 2u)) *len = sizeof proj_slot[0];
-        return (const uint8_t *)&proj_slot[id - 2u];
+        return (const uint8_t *)&proj_slot[(id - 2u) & 1u];
     }
     if (id == 6u || id == 7u) {
         if (up_bank[id - 6u].magic == UP_BANK_MAGIC) *len = sizeof up_bank[0];
@@ -135,10 +135,10 @@ static uint32_t ed_bk_commit(void)
     (void)obj;
 #endif
     if (ed_bk_id >= 2u && ed_bk_id <= 5u) {
-        memset(&proj_slot[ed_bk_id - 2u], 0, sizeof proj_slot[0]);
+        memset(&proj_slot[(ed_bk_id - 2u) & 1u], 0, sizeof proj_slot[0]);
         if (proj_cur == ed_bk_id - 2u)
             proj_cur = PROJ_NO_SLOT;                     /* (another project there now: the music keeps its name) */
-        if (ed_bk_len) memcpy(&proj_slot[ed_bk_id - 2u], raw, ed_bk_len);
+        if (ed_bk_len) memcpy(&proj_slot[(ed_bk_id - 2u) & 1u], raw, ed_bk_len);
     } else if (ed_bk_id == 1u) {
         memcpy(&ed_bk_settings, raw, sizeof ed_bk_settings);
         settings_import(&ed_bk_settings, sizeof ed_bk_settings);
@@ -155,10 +155,10 @@ static uint32_t ed_bk_commit(void)
     sync_reload = 1; ui.force = 1;
     return 0;
 }
-/* a project object's length: FUN10 (today's, 1.2), FUN9 (1.1), FUN8 (before the DRUM lane levels, 1.0.x), FUN7 */
+/* a project object's length: FUN12 (today's), FUN11/FUNB, FUN9, FUN8, FUN7 */
 static int proj_store_len(uint32_t len)
 {
-    return len == sizeof(project_store_t) || len == PROJ_STORE_V9 || len == PROJ_STORE_V8 || len == PROJ_STORE_V7;
+    return len == sizeof(project_store_t) || len == PROJ_STORE_V10 || len == PROJ_STORE_V9 || len == PROJ_STORE_V8 || len == PROJ_STORE_V7;
 }
 static uint32_t ed_bk_write(const uint8_t *a, uint32_t n)
 {

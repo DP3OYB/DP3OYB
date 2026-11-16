@@ -220,12 +220,18 @@ static uint32_t menu_tab(void) { return MI_TAB[ui.menu_sel % MI_COUNT]; }
 /* the shown tab's rows: 24 px (LARGE 28, a tab of up to 5 rows), 2 px apart (a tab of 6: 1 px, its panel then ends
  * 6 px above the key hints as the others do; the rule between two rows is that gap row; 1.2, a tab of 7: 21 px rows
  * 1 px apart, its panel then ends 4 px lower, LARGE too; 1.3, a tab of 8: 18 px rows 1 px apart, the same end) */
-static int32_t mr_h(void)
+static uint8_t tab_top[MTAB_COUNT];                    /* scroll: first visible row index per tab (0 = top) */
+static uint32_t menu_vis(void)                         /* visible rows in the current tab (capped at MTAB_ROWS) */
 {
     uint32_t n = mtab_rows(menu_tab());
-    return n > 7u ? 18 : n > 6u ? 21 : menu_large() && n <= 5u ? 28 : 24;
+    return n < MTAB_ROWS ? n : MTAB_ROWS;
 }
-static int32_t mr_gap(void) { return mtab_rows(menu_tab()) <= 5u ? 2 : 1; }
+static int32_t mr_h(void)
+{
+    uint32_t v = menu_vis();
+    return v > 7u ? 18 : v > 6u ? 21 : menu_large() && v <= 5u ? 28 : 24;
+}
+static int32_t mr_gap(void) { return menu_vis() <= 5u ? 2 : 1; }
 static int32_t mr_y(uint32_t k) { return MP_Y + MP_PAD + (int32_t)k * (mr_h() + mr_gap()); }
 
 /* the tab bar's place: the tab shown at pos tab * MT_ONE; with ANIM ON it follows in halving steps, a frame each
@@ -389,7 +395,7 @@ static void info_rows(void)                            /* (in screen rows: cv_oy
     char cpu[8];
     fmt_int(cpu, info.cpu);
     if (!ux.style)                                     /* FLAT: the rows' panel */
-        cv_rrect(4, INFO_Y, 232, (int32_t)INFO_N * (h + 2) - 2 + 2 * MP_PAD, 8, T_SURF, T_BG);
+        cv_rrect(4, INFO_Y, 232, (int32_t)INFO_N * (h + 2) - 2 + 2 * MP_PAD, 0, T_SURF, T_BG);
     for (k = 0; k < INFO_N; k++) {
         int32_t y = INFO_Y + MP_PAD + (int32_t)k * (h + 2), vy = y + CAP_IN(M, h);
         if (k)
@@ -431,7 +437,9 @@ static void draw_menu(void)
           ui_home_view * 7340033u +    /* (1.3: HOME) */
           (uint32_t)(song.g[G_TUNE] + 64) * 8191u + (uint32_t)song.g[G_ROUTE] * 27449u +   /* (1.2: the project's rows) */
           (song.mch[0] | (uint32_t)song.mch[1] << 8 | (uint32_t)song.mch[2] << 16 | (uint32_t)song.mch[3] << 24) *
-          2246822519u +                                   /* (1.5.5: T1..T4 CHANNEL) */
+          2246822519u +                                   /* (1.5.5: T1..T6 CHANNEL) */
+          ((uint32_t)song.mch[4] | (uint32_t)song.mch[5] << 8) * 1073741827u +
+          tab_top[menu_tab()] * 3267000013u +
           (ui.menu == 2 ? ui.menu_scroll * 48611u : 0u) + (ui.menu == 3 ? info_sig() * 2654435761u : 0u);
     if (!ui.force && sig == ui.menu_sig) {
         if (ui.menu == 1 && mt.pos != pos0) {          /* only the tabs slid: their strip */
@@ -479,22 +487,35 @@ static void draw_menu(void)
     }
     first = mtab_first(menu_tab());
     n = mtab_rows(menu_tab());
-    split = menu_split(n);
-    for (pass = 0; pass < 2u; pass++) {
-        int32_t top_y = pass ? (int32_t)split : H_HEAD;
-        cv_begin(240, pass ? 240u - split : split - H_HEAD, T_BG);
-        cv_oy = -top_y;                               /* drawn in screen rows */
-        if (!pass)
-            menu_tabs();
-        if (!ux.style)                                /* FLAT: the rows' panel */
-            cv_rrect(4, MP_Y, 232, mr_y(n) - mr_gap() + MP_PAD - MP_Y, 8, T_SURF, T_BG);
-        for (k = 0; k < n; k++)
-            if (mr_y(k) + mr_h() > top_y && mr_y(k) - 1 < top_y + (int32_t)cv_h)
-                menu_row(k, first + k);
-        if (pass)
-            cv_key_row(8, 232, MK_Y, KEYS[ui.menu_sel == MI_LCLEAR ? 2 : !menu_valued(ui.menu_sel)], 3, 7u, T_BG);
-        cv_oy = 0;
-        cv_blit(0, (uint32_t)top_y);
+    {
+        uint32_t vis = menu_vis(), top = n > MTAB_ROWS ? (uint32_t)tab_top[menu_tab()] : 0u;
+        split = menu_split(vis);
+        for (pass = 0; pass < 2u; pass++) {
+            int32_t top_y = pass ? (int32_t)split : H_HEAD;
+            cv_begin(240, pass ? 240u - split : split - H_HEAD, T_BG);
+            cv_oy = -top_y;                           /* drawn in screen rows */
+            if (!pass)
+                menu_tabs();
+            if (!ux.style)                            /* FLAT: the rows' panel */
+                cv_rrect(4, MP_Y, 232, mr_y(vis) - mr_gap() + MP_PAD - MP_Y, 0, T_SURF, T_BG);
+            for (k = top; k < n && k < top + MTAB_ROWS; k++) {
+                uint32_t slot = k - top;
+                if (mr_y(slot) + mr_h() > top_y && mr_y(slot) - 1 < top_y + (int32_t)cv_h)
+                    menu_row(slot, first + k);
+            }
+            if (n > MTAB_ROWS) {                      /* scrollbar */
+                int32_t sb_h = mr_y(vis) - mr_gap() + MP_PAD - MP_Y;
+                int32_t thumb = sb_h * (int32_t)MTAB_ROWS / (int32_t)n;
+                int32_t pos = (int32_t)top * (sb_h - (thumb < 8 ? 8 : thumb)) / (int32_t)(n - MTAB_ROWS);
+                if (thumb < 8) thumb = 8;
+                cv_rrect(235, MP_Y, 3, sb_h, 1, T_LINE, T_BG);
+                cv_rrect(235, MP_Y + pos, 3, thumb, 1, T_MID, T_LINE);
+            }
+            if (pass)
+                cv_key_row(8, 232, MK_Y, KEYS[ui.menu_sel == MI_LCLEAR ? 2 : !menu_valued(ui.menu_sel)], 3, 7u, T_BG);
+            cv_oy = 0;
+            cv_blit(0, (uint32_t)top_y);
+        }
     }
 }
 static void enc_drop(void)                             /* knob turns nobody takes */
@@ -516,11 +537,20 @@ static void menu_close(void)
  * last picked in it), any of KNOB 1..4 or OCT+ / OCT- change a value (menu_items.c menu_step), OCT+ opens CALIBRATION /
  * INFO / ABOUT (OCT- nothing there); OCT- in INFO and ABOUT goes back to the tabs. HOME closes it, from them too
  * (ui_input.c) */
+static void scroll_clamp(uint32_t t, uint32_t k)       /* keep row k visible in tab t */
+{
+    uint32_t n = mtab_rows(t);
+    if (n > MTAB_ROWS) {
+        if (k < tab_top[t]) tab_top[t] = (uint8_t)k;
+        else if (k >= (uint32_t)tab_top[t] + MTAB_ROWS) tab_top[t] = (uint8_t)(k - MTAB_ROWS + 1u);
+    }
+}
 static void menu_move(int32_t s)                       /* PRESETS: the next / previous row of the tab */
 {
     uint32_t t = menu_tab(), f = mtab_first(t), n = mtab_rows(t), k = (ui.menu_sel - f + (s > 0 ? 1u : n - 1u)) % n;
     ui.menu_sel = (uint8_t)(f + k);
     ui.menu_row[t] = (uint8_t)k;
+    scroll_clamp(t, k);
 }
 static void menu_tab_go(int32_t s)                     /* ALGORITHM: the next / previous tab, at its last row */
 {
@@ -529,6 +559,7 @@ static void menu_tab_go(int32_t s)                     /* ALGORITHM: the next / 
     t = (t + (s > 0 ? 1u : MTAB_COUNT - 1u)) % MTAB_COUNT;
     k = ui.menu_row[t] < mtab_rows(t) ? ui.menu_row[t] : 0u;
     ui.menu_sel = (uint8_t)(mtab_first(t) + k);
+    scroll_clamp(t, k);
 }
 static void menu_input(uint32_t oct)                  /* oct: ui_input.c oct_taps */
 {

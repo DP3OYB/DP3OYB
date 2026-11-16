@@ -9,7 +9,7 @@
 
 /* ------------------------------------------------------------ sizes --- */
 #define NVOICE 8                 /* voices per part, and the budget shared by all parts */
-#define NPART 4                  /* synth parts: tracks 1..4 */
+#define NPART 6                  /* synth parts: tracks 1..6 */
 #define NTRK NPART               /* tracks (the formats and the protocol count these): every track is a part */
 #define NSTEP 64
 #define HALF_FRAMES 128          /* I2S half buffer: 2.9 ms at 44.1 kHz (a key waits 0..1 half, then plays 1 half later) */
@@ -75,7 +75,8 @@
 enum {                          /* per-track parameters */
     P_LEVEL,
     P_ATK, P_DEC, P_SUS, P_REL,
-    P_ED_FLT, P_ED_PIT, P_ED_SHP, P_ED_FX,     /* P_ED_FX: unused, kept for the formats / protocol */
+    P_ED_FLT, P_ED_PIT, P_ED_SHP, P_SOFF,       /* P_SOFF (was P_ED_FX): loop phase offset (−32..32) */
+#define P_ED_FX P_SOFF                          /* frozen alias: projects and the protocol use this index */
     P_LRATE, P_LWAVE, P_LPHASE, P_LFADE,
     P_LD_PIT, P_LD_FLT, P_LD_SHP, P_LD_AMP,
     P_AMODE, P_ARATE, P_AOCT, P_AGATE,
@@ -103,6 +104,7 @@ enum {                          /* per-track parameters */
     P_FTYPE,                                   /* 1.5 (#104): ANALOG's filter TYPE, LP (as before) / BP / HP (eng_analog.c) */
     P_ESYNC,                                   /* 1.5 (#175): ENV SYNC: ATK DEC REL as note values of the tempo (voice.c) */
     P_ATSNS, P_ATDST, P_ATAMT,                 /* 1.8: AFTERTOUCH: the keys' pressure (keytouch.c) and its routing (mod.c) */
+    P_L2RATE, P_L2WAVE, P_L2SYNC, P_L2TRIG,   /* 2LFO: RATE WAVE SYNC(note value or OFF) TRIG(NOTE/FREE); phase=0, pol=UNI */
     P_E0, P_E1, P_E2, P_E3, P_E4, P_E5, P_E6, P_E7,
     P_COUNT
 };
@@ -111,8 +113,8 @@ enum {                          /* global parameters */
     G_BPM, G_SWING, G_CLOCK, G_TUNE,
     G_DTIME, G_DFDBK, G_DCOLOR, G_DMIX,
     G_RSIZE, G_RDAMP, G_CRATE, G_CDEPTH,
-    G_MIDI, G_SYNC, G_ROUTE, G_INFO,   /* G_ROUTE: MIDI IN, 0 CH1-4 (channels 1..4 -> parts 1..4, 5..16 ignored), 1 SEL;
-                                        * 1.2: 2..4 CH5-8 CH9-12 CH13-16 (seq.c midi_base); 1.5.5: 5 TRACK (song.mch) */
+    G_MIDI, G_SYNC, G_ROUTE, G_INFO,   /* G_ROUTE: MIDI IN, 0 CH1-6 (channels 1..6 -> parts 1..6, 7..16 ignored), 1 SEL;
+                                        * 2 CH7-12 (seq.c midi_base); 3 TRACK (song.mch, 1.5.5) */
     G_SLOT, G_NAME, G_LOAD, G_SAVE,
     G_ENGSEL, G_ENGGO,          /* no page: the editor switches the engine with a SET of G_ENGSEL; G_ENGGO is
                                  * unused (ids are fixed by the formats and the protocol) */
@@ -255,20 +257,20 @@ static void step_set_nudge(step_t *s, int32_t v)
     s->flags = (uint8_t)((s->flags & ~SF_NUDGE) | (u & 7u) << 5 | (u >> 1 & 4u));
 }
 #define MOTION_MAX 128u          /* 1.2 (FUN10): 64 before */
-/* Four tracks x64 steps fit one byte. Values retain their signed parameter range (-64..127: an int8_t, 1.2).
+/* Six tracks x64 steps: place uses bits 8:6 for the track (0..5) and bits 5:0 for the step (0..63).
  * param: the P_* id (< 128: P_COUNT is at most 127, project.c), bit 7 (MOTION_LOCK, 1.1) a parameter lock: the value
  * sounds on that step only and goes back after it (motion.c motion_step); without it an automation event, the
  * value holds until another one changes it. One record per (track, step, id), of either kind */
 #define MOTION_LOCK 0x80u
 #define MOTION_ID(e) ((uint32_t)(e)->param & 0x7Fu)
-typedef struct { uint8_t place, param; int8_t value; } motion_event_t;
+typedef struct { uint16_t place; uint8_t param; int8_t value; } motion_event_t;
 typedef struct { uint8_t count, on, rsv[2]; motion_event_t event[MOTION_MAX]; } motion_store_t;
-_Static_assert(sizeof(motion_store_t) == 388u, "motion disk layout (FUN10)");
+_Static_assert(sizeof(motion_store_t) == 516u, "motion disk layout (FUN12)");
 #define CHAIN_ROWS 16u
-/* A song section (1.2, FUN10): the PROJECT slot each track plays (0..3, A..D; CHAIN_SILENT "-": that track plays
+/* A song section (1.2, FUN10): the PROJECT slot each track plays (0..4, A..E; CHAIN_SILENT "-": that track plays
  * nothing there) and its repeats (1..16). Up to 1.1 a row was {slot, repeat}, all four tracks on that slot
  * (chain_v9_t, FUN6..FUN9): it loads as a section with the four on it (song_chain.c chain_from_v9) */
-#define CHAIN_SILENT 4u
+#define CHAIN_SILENT 5u
 typedef struct { uint8_t slot[NTRK], repeat; } chain_row_t;
 typedef struct {
     uint8_t count, rsv[3];
@@ -279,7 +281,7 @@ typedef struct {
     uint8_t count, rsv[3];
     chain_row_v9_t row[CHAIN_ROWS];
 } chain_v9_t;
-_Static_assert(sizeof(chain_config_t) == 84u && sizeof(chain_v9_t) == 36u, "song chain layouts (FUN10 / FUN6..FUN9)");
+_Static_assert(sizeof(chain_config_t) == 4u + CHAIN_ROWS * (NTRK + 1u) && sizeof(chain_v9_t) == 36u, "song chain layouts (FUN10 / FUN6..FUN9)");
 
 typedef struct track {
     int16_t p[P_COUNT];
@@ -287,12 +289,15 @@ typedef struct track {
     uint8_t eng_req;             /* engine the UI asked for (the ISR switches at a block start) */
     uint8_t user;                /* user preset slot + 1 the sound came from (UI), 0 = none */
     voice_t v[NVOICE];
-    /* LFO */
+    /* LFO 1 */
     uint32_t lfo_ph;
     int32_t lfo_val;             /* Q15 */
     int32_t lfo_fade;            /* Q15 ramp after note-on */
     uint32_t lfo_rnd;
     int16_t lfo_prev;            /* the S&H value of the cycle before (mod.c SLEW glides from it to lfo_rnd's) */
+    int16_t lfo2_val;            /* 2LFO output, Q15 unipolar (0..32767); recomputed each block */
+    uint16_t lfo2_ph;            /* 2LFO 16-bit phase accumulator (expand to 32-bit with << 16 for wave gen) */
+
     /* keyboard / arp input: held notes in press order */
     uint8_t held[16];
     uint8_t nheld;
@@ -345,9 +350,7 @@ typedef struct track {
     uint8_t lfo_wrap;            /* the LFO's phase wrapped this block: its S&H is drawn after the parts (voice.c) */
     uint32_t esync_k[3];         /* ATK's step, DEC's and REL's coefficient (Q16) this block (voice.c esync_coef) */
     uint8_t spread_on;           /* SPREAD this block (fx.c mix_part, voice.c track_render) */
-    uint8_t rsv_sz[15];          /* (sizeof(track_t) a multiple of 16: below; 1.8's AFTERTOUCH grew it by 14) */
-#else
-    uint8_t rsv_sz[12];          /* (sizeof(track_t) a multiple of 16: below; 1.8's AFTERTOUCH took 2 of it) */
+    uint8_t rsv_sz[3];           /* (sizeof(track_t) a multiple of 16; 2LFO absorbed 12 of the orig 15B pad) */
 #endif
     int16_t armp, aholdp;        /* P_AMODE / P_AHOLD as last seen by the ISR */
     /* engine switch (voice.c engine_block): the old engine's voices fade out, then it switches */
@@ -386,12 +389,13 @@ typedef struct {
                                   * MENU > MIDI > T1..T4 CHANNEL */
 } song_t;
 #define ROUTE_SEL 1
-#define ROUTE_TRACK 5                /* G_ROUTE: TRACK, each track on its own channel (song.mch) */
+#define ROUTE_TRACK 3                /* G_ROUTE: TRACK, each track on its own channel (song.mch) */
 #define MCH_OMNI 16u
 #define MCH_OFF 17u
 #define MCH_N 18u                    /* channels 1..16, OMNI, OFF */
 
 static track_t trk[NTRK];        /* the instrument: four parts */
+static int16_t trk_fx_pct[NTRK] = {51, 51, 51, 51, 51, 51}; /* FX% multiplier per track: 0..127 (127 = 100%); non-destructive FX titration */
 static song_t song;
 #define TSEL (&trk[song.sel])    /* the selected track */
 /* MIDI IN TRACK: track i's channel 0..15, MCH_OMNI or MCH_OFF (song.mch), and set */

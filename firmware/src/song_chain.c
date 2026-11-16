@@ -18,11 +18,12 @@ typedef struct {
     step_t step[NTRK][NSTEP];
     int16_t timing[NTRK][4];
     uint8_t qnt[NTRK];                       /* each track's QUANTIZE (P_SQNT) as saved */
+    int8_t offset[NTRK];                     /* each track's loop phase offset (P_SOFF) as saved */
     motion_store_t motion;
 } chain_pattern_t;
 static chain_config_t chain_config;
 static struct {
-    chain_pattern_t source[4];
+    chain_pattern_t source[4];           /* song sources A-D only; slot E (index 4) plays silent in sections */
     chain_config_t config;
     int16_t timing[NTRK][4];                 /* the editable LEN DIV SWING GATE and QUANTIZE, back on STOP */
     uint8_t qnt[NTRK];
@@ -97,7 +98,7 @@ static uint32_t chain_clock(const chain_row_t *r)
     return 0;
 }
 /* a track parameter a playing song sets from its slots (the editor and the pages leave it alone meanwhile) */
-static int chain_owns(uint32_t id) { return (id >= P_SLEN && id <= P_SGATE) || id == P_SQNT; }
+static int chain_owns(uint32_t id) { return (id >= P_SLEN && id <= P_SGATE) || id == P_SQNT || id == P_SOFF; }
 static const step_t *seq_steps(const track_t *t)
 {
     uint32_t k = (uint32_t)(t - trk), s;
@@ -122,13 +123,19 @@ static __attribute__((noinline)) void chain_apply(void)
         if (s < 4u) {
             memcpy(&t->p[P_SLEN], chain.source[s].timing[i], sizeof chain.timing[i]);
             t->p[P_SQNT] = chain.source[s].qnt[i];
+            t->p[P_SOFF] = chain.source[s].offset[i];
         } else {
             t->p[P_SLEN] = CHAIN_SIL_LEN;
             t->p[P_SDIV] = CHAIN_SIL_DIV;
             t->p[P_SSWING] = 0;
             t->p[P_SQNT] = 1;
+            t->p[P_SOFF] = 0;
         }
-        t->seq_idx = (uint16_t)(t->p[P_SLEN] - 1);
+        {
+            uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP);
+            int32_t off = (int32_t)t->p[P_SOFF] % (int32_t)len;
+            t->seq_idx = (uint16_t)(((int32_t)len - 1 + off + (int32_t)len) % (int32_t)len);
+        }
         t->seq_pos = 0x7FFFFFFFu;
         t->rh_n = t->rskip_n = 0;
     }

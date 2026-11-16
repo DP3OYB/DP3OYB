@@ -95,7 +95,7 @@ static struct {                          /* HALL's state (in the pool: no .bss) 
  * broken digital fuzz). State per part (track_t dist_*). */
 static void track_dist(track_t *t, int32_t *b, uint32_t n)
 {
-    int32_t d = t->p[P_DIST], i, g, k, mk, bias = 2400, b0;
+    int32_t d = (int32_t)t->p[P_DIST] * trk_fx_pct[t - trk] / 127, i, g, k, mk, bias = 2400, b0;
     if (!d)
         return;                                         /* states kept: switching on does not click */
     g = 4096 + d * d * 2;                                /* Q12: 1x .. ~9x, gentle at first */
@@ -788,7 +788,7 @@ static __attribute__((noinline)) void track_insert(track_t *t, int32_t *b, uint3
     int32_t ty = clamp(t->p[P_ITYPE], 0, IT_N - 1), tw;
     if (s->type != ty && !s->w)                         /* faded out: the new type from rest */
         s->type = (uint8_t)ty;
-    tw = s->type == ty && ty ? ins_mixq(t->p[P_IMIX]) : 0;
+    tw = s->type == ty && ty ? ins_mixq(t->p[P_IMIX] * trk_fx_pct[t - trk] / 127) : 0;
     if (!s->w) {
         if (!tw) {
             t->ins_run = 0;
@@ -831,7 +831,8 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
     int32_t gla = 4096 - (pa > 0 ? pa * 64 : 0), gra = 4096 + (pa < 0 ? pa * 64 : 0);
     int32_t glb = 4096 - (pb > 0 ? pb * 64 : 0), grb = 4096 + (pb < 0 ? pb * 64 : 0);
     int32_t glm = (gla + glb) >> 1, grm = (gra + grb) >> 1, gld = (gla - glb) >> 1, grd = (gra - grb) >> 1;
-    int32_t c = t->p[P_CHOR] * 258, dl = t->p[P_DLY] * 258, r = t->p[P_REV] * 258, pk = t->peak;
+    int32_t fx_m = trk_fx_pct[t - trk];
+    int32_t c = t->p[P_CHOR] * 258 * fx_m / 127, dl = t->p[P_DLY] * 258 * fx_m / 127, r = t->p[P_REV] * 258 * fx_m / 127, pk = t->peak;
     int32_t xmax = c > dl ? c : dl;
     xmax = 0x7FFFFFFF / ((xmax > r ? xmax : r) | 1);
     for (i = 0; i < n; i++)
@@ -918,7 +919,8 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
                                                          * them, no spill in the loop: the ISR's cost as before 1.5) */
         int32_t lvl = LEVEL_Q12[t->p[P_LEVEL] & 127], pan = t->p[P_PAN];
         int32_t gl = 4096 - (pan > 0 ? pan * 64 : 0), gr = 4096 + (pan < 0 ? pan * 64 : 0);
-        int32_t c = t->p[P_CHOR] * 258, d = t->p[P_DLY] * 258, r = t->p[P_REV] * 258, pk = t->peak;
+        int32_t fx_m = trk_fx_pct[t - trk];
+        int32_t c = t->p[P_CHOR] * 258 * fx_m / 127, d = t->p[P_DLY] * 258 * fx_m / 127, r = t->p[P_REV] * 258 * fx_m / 127, pk = t->peak;
         int32_t xmax = c > d ? c : d;
         xmax = 0x7FFFFFFF / ((xmax > r ? xmax : r) | 1);   /* sends: loud chords at a high LEVEL */
         for (i = 0; i < n; i++) {
@@ -948,7 +950,7 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
  * mix before MASTER (and before the FX layer, SPEAKER EQ and the limiter), at the level MASTER at its top gives, so its
  * size does not follow the volume. The click is in neither */
 #define SCOPE_N 512u
-static int16_t scope_buf[SCOPE_N];
+static int16_t scope_buf[SCOPE_N] __attribute__((section(".pool")));   /* scope_w stays in .bss; initial garbage clears within 1 s */
 static uint32_t scope_w;
 static volatile uint8_t scope_mix;
 static __attribute__((noinline)) void scope_take_mix(uint32_t n)
@@ -1061,8 +1063,10 @@ static void mix_block(int32_t *out, uint32_t n)
             send_r[i] += sm->v[i];
         }
     }
-    for (i = 0; i < NPART; i++)                         /* the LFOs' blocks, part by part (voice.c) */
+    for (i = 0; i < NPART; i++) {                        /* the LFOs' blocks, part by part (voice.c) */
         track_lfo_end(&trk[i]);
+        track_lfo2_tick(&trk[i]);
+    }
 #else
     for (i = 0; i < NPART; i++)                         /* (one core: as 1.6) */
         mix_part(&trk[i], n);

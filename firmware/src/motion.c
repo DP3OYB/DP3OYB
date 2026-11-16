@@ -8,7 +8,7 @@
  * turn a knob) sets its value at its step only when the step plays (its chance passed) and the next step puts back
  * what would sound without it: the latest automation event of the pass up to that step, else the sound's own value
  * (motion_unlock). A lock lasts the whole step, its RATCH parts too; swing only moves the step's start. */
-static motion_store_t motion;
+static motion_store_t motion __attribute__((section(".pool")));   /* uint16_t place: 516 B; keep in pool to stay within .bss headroom */
 static int16_t motion_base[NTRK][P_COUNT];
 static uint32_t motion_active[NTRK][(P_COUNT + 31u) / 32u];
 static uint32_t motion_locked[NTRK][(P_COUNT + 31u) / 32u];   /* the ids a lock holds now (put back at the next step) */
@@ -176,7 +176,7 @@ static int motion_put(track_t *t, uint32_t step, uint32_t id, int16_t value, uin
     for (i = 0; i < motion.count; i++)
         if (motion.event[i].place == (k << 6 | step) && MOTION_ID(&motion.event[i]) == id) break;
     if (i == MOTION_MAX) { motion_full = 1; motion_unguard(f); return 2; }
-    motion.event[i].place = (uint8_t)(k << 6 | step);
+    motion.event[i].place = (uint16_t)(k << 6 | step);
     motion.event[i].param = (uint8_t)(id | kind);
     motion.event[i].value = (int8_t)value;
     RING_PUBLISH();
@@ -361,7 +361,7 @@ static int motion_move(track_t *t, uint32_t i, uint32_t step, uint32_t id, int16
     f = motion_guard();
     if (motion.event[i].place != (trk_index(t) << 6 | step) || MOTION_ID(&motion.event[i]) != id)
         motion_restore(t);                              /* (a value alone: what sounds stays) */
-    motion.event[i].place = (uint8_t)(trk_index(t) << 6 | step);
+    motion.event[i].place = (uint16_t)(trk_index(t) << 6 | step);
     motion.event[i].param = (uint8_t)((motion.event[i].param & MOTION_LOCK) | id);
     motion.event[i].value = (int8_t)param_fit(d, v);
     motion_unguard(f);

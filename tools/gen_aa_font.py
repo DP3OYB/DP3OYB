@@ -56,6 +56,14 @@ def preset(name):
         return [("S", v + "@400", 12, (32, 126), EXTRAS, 0.0, PHASES),
                 ("M", v + "@500", 15, (32, 126), EXTRAS, 0.0, PHASES),
                 ("L", v + "@600", 28, (32, 32), [ord(c) for c in L_CHARS[1:]], 0.0, PHASES_L)]
+    if name == "pixelify-sans":
+        win = "/mnt/c/Users/downe/AppData/Local/Microsoft/Windows/Fonts"
+        r = win + "/PixelifySans-Regular.ttf"
+        m = win + "/PixelifySans-Medium.ttf"
+        b = win + "/PixelifySans-Bold.ttf"
+        return [("S", r, 11, (32, 126), EXTRAS, 0.0, PHASES),
+                ("M", m, 15, (32, 126), EXTRAS, 0.0, PHASES),
+                ("L", b, 28, (32, 32), [ord(c) for c in L_CHARS[1:]], 0.0, PHASES_L)]
     if name == "standin":
         if os.path.exists(LOCAL_INTER):
             reg, med, semi = LOCAL_INTER + "#0", LOCAL_INTER + "#10", LOCAL_INTER + "#12"
@@ -231,7 +239,7 @@ def emit(face, tracking, gamma, kern_min):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("out")
-    ap.add_argument("--preset", choices=["standin", "inter-tight"])
+    ap.add_argument("--preset", choices=["standin", "inter-tight", "pixelify-sans"])
     ap.add_argument("--face", action="append", default=[])
     ap.add_argument("--tracking", type=float, default=0.0, help="extra advance per glyph in em")
     ap.add_argument("--gamma", type=float, default=1.0, help="coverage curve; <1 thickens light-on-dark text")

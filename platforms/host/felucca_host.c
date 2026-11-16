@@ -265,7 +265,7 @@ static void cdc_task(void) {}
 #undef usb_detach
 
 /* --------------------------------------------------------- the device --- */
-static uint32_t fh_on, fh_boot_ms, fh_last_frame;
+static uint32_t fh_on, fh_boot_ms, fh_last_frame, fh_splash_start_ms;
 
 /* main.c fm1_main's boot, up to the main loop (no USB, no UART, no panel setup) */
 static void fh_power_on(void)
@@ -286,7 +286,8 @@ static void fh_power_on(void)
     audio_init();
     boot_leds();                          /* main.c: the power-on LED sweep, from the scan's start */
     autosave_boot(boot_clean);            /* main.c: the last session's music (1.2, project.c) */
-    fh_boot_ms = fm1_ms + 430u;         /* main.c: 30 + 400 ms before the first frame */
+    fh_splash_start_ms = fm1_ms;
+    fh_boot_ms = fm1_ms + FM1_SPLASH_MS;  /* main.c: the animated splash before the first frame */
     fh_on = 1;
 }
 
@@ -328,6 +329,8 @@ static void fh_ms(void)
         }
         fh_half ^= 1u;
     }
+    if (fh_on && (int32_t)(fm1_ms - fh_boot_ms) < 0 && (fm1_ms - fh_splash_start_ms) % 16u == 0)
+        draw_splash_frame(fm1_ms - fh_splash_start_ms);  /* animate logo during boot window (~60 fps) */
     if (!fh_on || (int32_t)(fm1_ms - fh_boot_ms) < 0)
         return;
     if (fh_boot_ms) {                                    /* main.c: the splash goes, the loop starts */

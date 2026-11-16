@@ -86,10 +86,13 @@ static int mom_turn(uint32_t k, int32_t s)
     const track_t *t = ui.home ? home_trk(k) : TSEL;     /* (HOME LEVELS: KNOB k is track k's) */
     if (ui.home) {
         d = home_param(k, &vp);
-    } else if (pg->scope == SC_TRK && !lock_held()) {  /* MIXER (#195): the selected track's LEVEL PAN REV MUTE */
-        static const uint8_t MIX_ID[4] = {P_LEVEL, P_PAN, P_REV, P_MUTE};   /* (tracks_edit's knobs) */
-        vp = &TSEL->p[MIX_ID[k & 3u]];
-        d = &TP[MIX_ID[k & 3u]];
+    } else if (pg->scope == SC_TRK && !lock_held()) {  /* MIXER (#195): the selected track's LEVEL PAN FX% MUTE */
+        static const uint8_t MIX_ID[4] = {P_LEVEL, P_PAN, P_DIST, P_MUTE};  /* K3=FX%: P_DIST representative */
+        uint32_t id = (k & 3u) == 3u && pg->graph == GR_HOME_TRK ? P_SLEN :
+                      (k & 3u) == 2u && pg->graph == GR_HOME_TRK ? P_SOFF :
+                      MIX_ID[k & 3u];                             /* (TRACKS: K3=OFFS K4=LEN) */
+        vp = &TSEL->p[id];
+        d = &TP[id];
     } else {
         if (act_cols() || lock_held() || !(pg->scope == SC_TRACK || pg->scope == SC_ENGINE || pg->scope == SC_GLOBAL) ||
             pg->graph == GR_EVENTS || pg->graph == GR_SONG || pg->graph == GR_BROWSE || pg->graph == GR_USER ||
@@ -157,6 +160,10 @@ static uint32_t oct_leds(void)
         return 1u | (ui.confirm || act_ready() ? OCT_BREATH : 0u);
     if (mom.n && mom_down())                            /* MOMENTARY: OCT+ keeps the changes */
         return (song.octave < 0 ? 1u : 0u) | OCT_BREATH;
+    if (kb_hold[song.sel % NTRK])                      /* NOTE HOLD active on selected track: OCT+ breathes */
+        return (song.octave < 0 ? 1u : 0u) | OCT_BREATH;
+    if (env_retrig[song.sel % NTRK])                   /* ENV RETRIG active on selected track: OCT- breathes */
+        return (song.octave > 0 ? 2u : 0u) | OCT_BREATH_DN;
     return (song.octave < 0 ? 1u : 0u) | (song.octave > 0 ? 2u : 0u);
 }
 
@@ -506,8 +513,9 @@ static int32_t accel(uint32_t role, int32_t s, int32_t range)
     return s * (int32_t)m;
 }
 
-/* MIXER page: KNOB 1 LEVEL, 2 PAN, 3 REV send, 4 MUTE of the selected track (right = ON, left = OFF: the
- * track itself is ALGORITHM's, on every page). Pattern length stays on SEQ. */
+/* MIXER page: KNOB 1 LEVEL, 2 PAN, 3 FX% (all four FX sends together), 4 MUTE of the selected track.
+ * TRACKS page: the same but KNOB 4 LEN, the track's pattern length in steps (SEQ held > PATTERN's KNOB 1), at hand
+ * while setting up and playing; as there, not while a song plays (STOP TO EDIT). */
 static void tracks_edit(uint32_t slot, int32_t steps)
 {
     track_t *t = TSEL;
@@ -515,17 +523,33 @@ static void tracks_edit(uint32_t slot, int32_t steps)
     const param_desc_t *d;
     switch (slot) {
     case 3:
+        if (cur_page()->graph == GR_HOME_TRK) {         /* TRACKS: LEN */
+            if (chain_busy()) {
+                ui_message("STOP TO EDIT");
+                return;
+            }
+            vp = &t->p[P_SLEN];
+            d = &TP[P_SLEN];
+            break;
+        }
         t->p[P_MUTE] = (int16_t)(steps > 0);
-        ml_knob(t, P_MUTE);                             /* (MIDI LEARN: picked) */
+        ml_knob(t, P_MUTE);
         return;
     case 0:
         vp = &t->p[P_LEVEL];
         d = &TP[P_LEVEL];
         break;
     case 2:
-        vp = &t->p[P_REV];
-        d = &TP[P_REV];
-        break;
+        if (cur_page()->graph == GR_HOME_TRK) {         /* TRACKS: OFFS (loop phase offset) */
+            vp = &t->p[P_SOFF];
+            d = &TP[P_SOFF];
+            break;
+        }
+        {   /* MIXER: FX%: adjust non-destructive multiplier (trk_fx_pct), does not modify FX page params */
+            int32_t delta = accel(EN_K1 + slot, steps, 127);
+            trk_fx_pct[song.sel] = (int16_t)clamp((int32_t)trk_fx_pct[song.sel] + delta, 0, 127);
+            return;
+        }
     default:
         vp = &t->p[P_PAN];
         d = &TP[P_PAN];
@@ -1590,7 +1614,8 @@ static void ui_input(void)
         }
         if (ui.ly == LAYER_FX && ((pressed >> panel.btn[B_EDIT]) & 1u))
             fx_default();                               /* .. EDIT: its default back */
-        panel_enc(EN_ALGO);                             /* (another track: OCT- puts back the layer's track only) */
+        if ((s = panel_enc(EN_ALGO)) != 0 && ui.lock)  /* locked open: ALGO still selects track */
+            track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, NTRK - 1));
         if (glo && (sel = panel_enc(EN_SELECT)) != 0)   /* GLO + SELECT: the tempo, a combo (OCT- puts it back) */
             combo = 1;
     } else if ((kq = (uint32_t)layer_knobs_quiet()) != 0) {   /* a layer letting go: KNOB 1..4 are nobody's (#39) */
@@ -1656,13 +1681,13 @@ static void ui_input(void)
             ui.confirm = 0;
             ui.force = 1;
             if (kind == CF_OVR_PROJ) {                  /* overwrite: the NAME screen writes it */
-                name_open(NK_PROJ_SAVE, ui.confirm_trk & 3u);
+                name_open(NK_PROJ_SAVE, ui.confirm_trk % CHAIN_SILENT);
             } else if (kind == CF_OVR_USER) {
                 name_open(NK_USER_SAVE, ui.confirm_trk);
             } else if (kind == CF_ERASE_USER) {
                 up_ui(1u, ui.confirm_trk);
             } else if (kind == CF_ERASE_PROJ) {
-                (void)project_erase(ui.confirm_trk & 3u);
+                (void)project_erase(ui.confirm_trk % CHAIN_SILENT);
             } else if (kind == CF_LOAD_PAT) {
                 pat_load_ui(&trk[ui.confirm_trk % NTRK], pat_pick());
                 str_cpy(ui.msg2, "[SAVE] HOLD TO UNDO", sizeof ui.msg2);
@@ -1684,7 +1709,7 @@ static void ui_input(void)
             } else if (kind == CF_LEARN_CLEAR) {
                 ui_message(ml_clear_all() ? "LEARN CLEARED" : "NOTHING LEARNED");
             } else if (kind == CF_LOAD_PROJ) {
-                project_load(ui.confirm_trk & 3u);
+                project_load(ui.confirm_trk % CHAIN_SILENT);
             } else if (kind == CF_CLEAR_ALL) {
                 (void)project_new();
             } else if (kind == CF_CLEAN_SOUND) {
@@ -1741,15 +1766,52 @@ static void ui_input(void)
         case B_EDIT:
         case B_HOME:
             break;
-        case B_OCTDN:
-        case B_OCTUP: {
+        case B_OCTDN: {
+            static uint32_t oct_dn_t;
             uint32_t both = (1u << panel.btn[B_OCTDN]) | (1u << panel.btn[B_OCTUP]);
-            if (act_cols() || layer_set_open() || ui.ml.on)   /* action pages: enter / back (below); SET layers: OCT-; */
-                break;                                  /* MIDI LEARN: clear / done (below) */
-            if ((fm1_in.buttons & both) == both)
+            if (act_cols() || layer_set_open() || ui.ml.on)
+                break;
+            if ((fm1_in.buttons & both) == both) {
                 song.octave = 0;
-            else
-                song.octave += b == B_OCTDN ? (song.octave > -3 ? -1 : 0) : (song.octave < 3 ? 1 : 0);
+                oct_dn_t = 0;
+                break;
+            }
+            /* double-tap: second press within 400 ms toggles envelope retrigger */
+            if (oct_dn_t && now - oct_dn_t < 400u * 1000u * FM1_TICKS_PER_US) {
+                oct_dn_t = 0;
+                if (song.octave > -3)                  /* undo the first tap's octave shift */
+                    song.octave++;
+                env_retrig_toggle();
+                ui_message(env_retrig[song.sel % NTRK] ? "RETRIG ON" : "RETRIG OFF");
+                break;
+            }
+            oct_dn_t = now;
+            if (song.octave > -3)
+                song.octave--;
+            break;
+        }
+        case B_OCTUP: {
+            static uint32_t oct_up_t;
+            uint32_t both = (1u << panel.btn[B_OCTDN]) | (1u << panel.btn[B_OCTUP]);
+            if (act_cols() || layer_set_open() || ui.ml.on)
+                break;
+            if ((fm1_in.buttons & both) == both) {
+                song.octave = 0;
+                oct_up_t = 0;
+                break;
+            }
+            /* double-tap: second press within 400 ms toggles note hold */
+            if (oct_up_t && now - oct_up_t < 400u * 1000u * FM1_TICKS_PER_US) {
+                oct_up_t = 0;
+                if (song.octave < 3)                   /* undo the first tap's octave shift */
+                    song.octave--;
+                kb_hold_toggle();
+                ui_message(kb_hold[song.sel % NTRK] ? "HOLD ON" : "HOLD OFF");
+                break;
+            }
+            oct_up_t = now;
+            if (song.octave < 3)
+                song.octave++;
             break;
         }
         default:                                        /* page buttons (GLO SCL ENV LFO EDIT ARP): when let go */

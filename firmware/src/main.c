@@ -73,7 +73,8 @@ static void felucca_init(void)
     undo_depth--;
     song.sel = 0;
     song.master_q12 = 2048;                   /* (the pot's level replaces it before the audio starts: master_boot) */
-    ui.home = 1;
+    ui.home = 0;
+    open_family(FAM_TRK);    /* open on MIXER at startup */
     ui.force = 1;
 }
 
@@ -163,7 +164,8 @@ static void fm1_main(void)
         settings_save();
     }
     autosave_boot(boot_clean);                /* (1.2) the last session's music, under the splash */
-    for (ms = 0; ms < 400u; ms += 10u) {      /* the splash; the pot followed (MIDI IN plays under it) */
+    draw_splash_frame(0);                   /* logo centred, version, tag line */
+    for (ms = 0; ms < FM1_SPLASH_MS; ms += 10u) {
         fm1_delay_ms(10);
         master_poll();
     }

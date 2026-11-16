@@ -2,17 +2,17 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Felucca 1.2: the SEQ TOOLS layer's actions (ui_layer.c: SEQ held, on every page). Included by ui_layer.c. The white
  * keys from F3 (TL_*):
- *   F3 CLEAR  G3 REVERSE  A3 SHIFT <  B3 SHIFT >       the whole sequence
- *   C4 RANDOM D4 COOK     E4 BEAT (DRUM)  F4 EUCLID      new / a little changed (EUCLID: 1.5.5, below)
- *   G4 CLEAR  A4 REVERSE  B4 FILL  C5 RANDOM             the selected lane (DRUM: ui.lane, black keys 1..8 pick it)
- *   D5 DOUBLE E5 HALF                                    LEN x2 / half (1.5.5, below)
+ *   F3 REVERSE  G3 SHIFT <  A3 SHIFT >  B3 RANDOM       the whole sequence
+ *   C4 COOK     D4 EUCLID   E4 BEAT (DRUM)               new / a little changed (EUCLID: 1.5.5, below)
+ *   G4 A-CLR   A4 P-CLR    B4 FILL  C5 RANDOM             the lane (DRUM: ui.lane, black keys 1..8 pick it); A-CLR and P-CLR: all tracks
+ *   D5 DOUBLE  E5 HALF                                    LEN x2 / half (1.5.5, below)
  * Each works on the selected track's steps 1..LEN (the steps past LEN stay) and is one undo: SAVE held swaps back
  * the copy taken just before it (ui.c undo, UNDO_PAT; unlike a load the track's automation stays), so after a few
  * COOKs SAVE held takes back the last one only; the layer's OCT- puts back the track as the layer opened (tl_open).
  * A step that held something and is empty after loses its locks (as EDIT's step clear); REVERSE and SHIFT move the
  * steps' automation and locks with them. RANDOM and COOK draw from libc.c rng(): no seed is kept, each press
  * differs. A sequence of ties reversed keeps its note first: N T T -> N T T at the mirrored place */
-enum { TL_CLEAR, TL_REV, TL_LEFT, TL_RIGHT, TL_RANDOM, TL_COOK, TL_BEAT, TL_EUCLID, TL_LCLR, TL_LREV, TL_LFILL, TL_LRND,
+enum { TL_REV, TL_LEFT, TL_RIGHT, TL_RANDOM, TL_COOK, TL_EUCLID, TL_BEAT, TL_NONE, TL_ACLR, TL_PCLR, TL_LFILL, TL_LRND,
        TL_DOUBLE, TL_HALF, TL_N };
 
 /* the track as the layer opened (OCT-): in the pool (RAM's .bss is tight), taken by layer_opened */
@@ -25,7 +25,7 @@ static uint32_t tl_lane(const step_t *s, uint32_t l) { return (step_lanes(s) >> 
 /* place p's action is there for this track (the lane row and BEAT: DRUM only) */
 static int tl_cell(const track_t *t, uint32_t p)
 {
-    return p < TL_N && (p < TL_BEAT || p == TL_EUCLID || p >= TL_DOUBLE || drum_track(t));
+    return p < TL_N && p != TL_NONE && (p < TL_BEAT || p == TL_ACLR || p == TL_PCLR || p >= TL_DOUBLE || drum_track(t));
 }
 
 /* the undo copy of t as it is now (ui.c load_begin, but the automation is copied and stays): one action */
@@ -81,7 +81,7 @@ static void tl_order(track_t *t, uint32_t len, const uint8_t *src)
     for (j = 0; j < motion.count; j++) {
         motion_event_t *e = &motion.event[j];
         if ((e->place >> 6) == k && (e->place & 63u) < len)
-            e->place = (uint8_t)(k << 6 | to[e->place & 63u]);
+            e->place = (uint16_t)(k << 6 | to[e->place & 63u]);
     }
     motion_unguard(f);
 }
@@ -495,7 +495,7 @@ static int tl_motion_plan(track_t *t, uint32_t lo, uint32_t hi, uint32_t cn, uin
         if (s < cn) {
             if (n < MOTION_MAX) {
                 tl_mo.event[n] = *e;
-                tl_mo.event[n].place = (uint8_t)(k << 6 | (s + by));
+                tl_mo.event[n].place = (uint16_t)(k << 6 | (s + by));
             }
             n++;
         }
@@ -557,6 +557,12 @@ static const char *tl_do(track_t *t, uint32_t p, uint32_t l)
     l %= NLANE;
     if ((p == TL_DOUBLE || p == TL_HALF) && !tl_resize_ok(t, p, len))
         return 0;
+    if (p == TL_ACLR) {                                  /* load_begin/end: motion_restore before snapshot, rebase after */
+        load_begin(t, UNDO_PAT);
+        motion_clear(t);
+        load_end(t);
+        return "AUTOMATION CLEARED";
+    }
     if (p == TL_COOK) {                                 /* (nothing there: nothing to cook, no undo copy) */
         for (i = 0; i < len; i++)
             n += drum ? (uint32_t)__builtin_popcount(step_lanes(&t->step[i])) : (uint32_t)tl_gate(&t->step[i]);
@@ -567,7 +573,7 @@ static const char *tl_do(track_t *t, uint32_t p, uint32_t l)
     }
     tl_undo_take(t);
     switch (p) {
-    case TL_CLEAR:
+    case TL_PCLR:
         for (i = 0; i < len; i++)
             step_clear(&t->step[i]);
         msg = "SEQUENCE CLEARED";
@@ -611,21 +617,10 @@ static const char *tl_do(track_t *t, uint32_t p, uint32_t l)
         break;
     default:                                            /* the lane's */
         str_cpy(b, drum_lane_name(t, l), sizeof b);
-        if (p == TL_LCLR) {
-            tl_lane_clear(t, len, l);
-            msg = " CLEARED";
-        } else if (p == TL_LREV) {
-            for (i = 0; i < len; i++) {
-                const step_t *s = &undo.step[len - 1u - i];
-                grid_hit(t, i, l, tl_lane(s, l));
-                if (tl_lane(s, l))
-                    grid_acc(t, i, l, (step_accents(s) >> l) & 1u);
-            }
-            msg = " REVERSED";
-        } else if (p == TL_LFILL) {
+        if (p == TL_LFILL) {
             n = tl_fill(t, len, l);
             msg = n == 1u ? " EVERY STEP" : n == 2u ? " EVERY 2ND" : n ? " EVERY 4TH" : " CLEARED";
-        } else {
+        } else {                                        /* TL_LRND */
             tl_lane_rnd(t, len, l, 0);
             msg = " RANDOM";
         }

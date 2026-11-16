@@ -231,20 +231,15 @@ static void drum_note_on(track_t *t, voice_t *v)
     L->owner = (uint8_t)(i + 1u);                        /* (its last voice, if another, ends: drum_amp) */
     v->s[0] = (int32_t)lane;
     v->env_out = v->vel * 258;                           /* the hit starts at its level (no ramp from 0) */
-    v->env = 1 << 24;                                    /* the ADSR held at full from here, not from drum_amp:
-                                                          * a key-off before the first block (zero-length MIDI
-                                                          * notes) would end a fresh voice at env 0 in env_tick */
     dv_trigger(&L->v);
     if (lane == DV_HATC && K[DV_HATO].v.live)            /* a closed hat chokes the open one */
         dv_choke(&K[DV_HATO].v);
 }
 
-/* the voice's amplitude: the hit, not the ADSR (which still runs, held at full so a release never ends
- * it). A voice that plays no lane any more, or whose drum has rung out, ends here */
+/* the voice's amplitude: the ADSR shapes the hit; a voice whose lane has rung out ends here */
 static int32_t drum_amp(track_t *t, voice_t *v, int32_t adsr)
 {
     const drum_lane_t *L = drum_lane_of(t, v);
-    (void)adsr;
     if (!v->active)                                      /* (taken for another part: env_tick ended it) */
         return 0;
     if (!L || (!L->v.live && !L->v.trig)) {
@@ -253,8 +248,7 @@ static int32_t drum_amp(track_t *t, voice_t *v, int32_t adsr)
         v->env = 0;
         return 0;
     }
-    v->env = 1 << 24;
-    return 32767;
+    return adsr;
 }
 
 static void drum_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)

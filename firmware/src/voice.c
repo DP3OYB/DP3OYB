@@ -12,9 +12,9 @@
  * declicks it); one of the part's own is restarted in place, as before. Extra UNISON
  * voices only start when there is room. */
 static uint32_t vage;                                   /* voice ages: one clock for every part */
-static int32_t lfo_wave(track_t *t, uint32_t ph)
+static int32_t lfo_wave_gen(uint32_t wave, uint32_t rnd, uint32_t ph)
 {
-    switch (t->p[P_LWAVE]) {
+    switch (wave) {
     case 1:
         return osc_tri(ph);
     case 2:
@@ -22,10 +22,16 @@ static int32_t lfo_wave(track_t *t, uint32_t ph)
     case 3:
         return ph < 0x80000000u ? 32767 : -32767;
     case 4:
-        return (int32_t)(t->lfo_rnd >> 16) - 32768;
+        return (int32_t)(rnd >> 16) - 32768;
+    case 5:
+        return 32767 - (int32_t)(ph >> 16);
     default:
         return osc_sine(ph);
     }
+}
+static int32_t lfo_wave(track_t *t, uint32_t ph)
+{
+    return lfo_wave_gen((uint32_t)t->p[P_LWAVE], t->lfo_rnd, ph);
 }
 
 /* the S&H value of a new LFO cycle. Parts 1..3 draw it from the shared generator (rng); part 4 has its
@@ -53,6 +59,16 @@ static __attribute__((noinline)) uint32_t lfo_sync_inc(const track_t *t)   /* (n
 {
     uint32_t cyc, q, r;
     cyc = div_samples(LSYNC_DIV[(uint32_t)t->p[P_LSYNC] % NELEM(LSYNC_DIV)]);
+    cyc = cyc ? cyc : 1u;
+    q = 0xFFFFFFFFu / cyc;
+    r = 0xFFFFFFFFu % cyc;
+    return q * CTL + (r * CTL + CTL) / cyc;
+}
+
+static __attribute__((noinline)) uint32_t lfo2_sync_inc(const track_t *t)
+{
+    uint32_t cyc, q, r;
+    cyc = div_samples(LSYNC_DIV[(uint32_t)t->p[P_L2SYNC] % NELEM(LSYNC_DIV)]);
     cyc = cyc ? cyc : 1u;
     q = 0xFFFFFFFFu / cyc;
     r = 0xFFFFFFFFu % cyc;
@@ -107,6 +123,26 @@ static void track_lfo_tick(track_t *t)                  /* (one core: the whole 
     }
 }
 #endif
+
+/* 2LFO: always UNI (0..32767), no fade, independent of LFO1.
+ * 16-bit phase for compactness; S&H uses a hash of the cycle counter. */
+static void track_lfo2_tick(track_t *t)
+{
+    uint32_t wave = (uint32_t)t->p[P_L2WAVE];
+    uint16_t old = t->lfo2_ph;
+    uint32_t inc = t->p[P_L2SYNC] ? (uint16_t)(lfo2_sync_inc(t) >> 16)
+                                   : (uint16_t)(LFO_INC[t->p[P_L2RATE] & 127] >> 16);
+    t->lfo2_ph = (uint16_t)(old + inc);
+    if (wave == 4) {                                     /* S&H: new value each cycle (hash of track+ph) */
+        if (t->lfo2_ph < old) {
+            uint32_t h = ((uint32_t)(t - trk) * 2246822519u) ^ ((uint32_t)t->lfo2_ph * 2654435761u);
+            t->lfo2_val = (int16_t)((h >> 1) & 0x7FFF);
+        }
+        return;
+    }
+    uint32_t ph32 = (uint32_t)t->lfo2_ph << 16;
+    t->lfo2_val = (int16_t)((lfo_wave_gen(wave, 0, ph32) + 32768) >> 1);
+}
 
 /* voices the engine may use (POLY and UNISON): its cap, else all of them */
 static uint32_t trk_nvoice(const track_t *t)
@@ -414,6 +450,8 @@ static void trk_note_on(track_t *t, uint32_t note, uint32_t vel)
         if (!t->p[P_LTRIG])
             t->lfo_ph = (uint32_t)t->p[P_LPHASE] << 25;
         t->lfo_fade = 0;
+        if (!t->p[P_L2TRIG])
+            t->lfo2_ph = 0u;
     }
     if (mode == V_POLY) {
         voice_t *v = voice_alloc(t, note);
@@ -577,6 +615,11 @@ static __attribute__((noinline)) void esync_coef(track_t *t)   /* (not inlined: 
     }
 }
 
+/* double-tap OCT-: envelope retrigger — when SUS=0 and decay reaches silence, restart attack while gate is held */
+static uint8_t env_retrig[NTRK];        /* per track: double-tap OCT- envelope retrigger */
+static void env_retrig_toggle(void) { env_retrig[song.sel % NTRK] ^= 1u; }
+static uint32_t env_retrig_on(uint32_t c) { return c < NTRK ? env_retrig[c] : 0u; }
+
 /* one control tick (CTL samples) of the amplitude envelope; returns Q15 */
 static int32_t env_tick(track_t *t, voice_t *v)
 {
@@ -592,6 +635,10 @@ static int32_t env_tick(track_t *t, voice_t *v)
         break;
     case 2:
         v->env += mulq16(sus - v->env, T_ESYNC(t)[1]);
+        if (env_retrig[(uint32_t)(t - trk)] && !sus && v->gate && v->env < (1 << 12)) {
+            v->env = 0;                                /* retrigger: restart attack from silence */
+            v->stage = 1;
+        }
         break;
     case 3:
         v->env -= mulq16(v->env, T_ESYNC(t)[2]);
@@ -697,6 +744,7 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
     track_lfo_adv(t);                                   /* (the rest of its block after the parts: fx.c mix_block) */
 #else
     track_lfo_tick(t);
+    track_lfo2_tick(t);
 #endif
     esync_coef(t);                                      /* this block's envelope steps for env_tick (ENV SYNC) */
     if (e->block)                                       /* the engine's per-part work (WHEEL: bars, rotor) */

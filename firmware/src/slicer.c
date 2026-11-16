@@ -19,6 +19,8 @@
  * step_samples); sample exact. With the SLICER OFF and no ramp left, the signal is not touched. */
 #define SL_NPAT 16
 #define SL_LEN 4096u                    /* recording, 22.05 kHz samples a track: 186 ms, 8 KB */
+#define SL_TRACKS 4u                    /* tracks with STUT/slicer; tracks 5-6 play live only */
+#define SL_HALF (SL_LEN / 2u)           /* stored depth per track: 93 ms (halved to fit 6-track pool) */
 #define SL_RAMP_LOG2 7
 #define SL_RAMP (1 << SL_RAMP_LOG2)     /* 128 samples, 2.9 ms */
 #define SL_SLOPE (32768 / SL_RAMP)
@@ -45,7 +47,7 @@ static const uint16_t SL_PAT[SL_NPAT] = {
 };
 static const uint8_t SL_DEN[6] = {2, 4, 8, 3, 6, 12};   /* P_SLRATE (N_SLDIV): a step = 1 / DEN beats */
 
-static int16_t sl_buf[NTRK][SL_LEN] __attribute__((section(".pool")));
+static int16_t sl_buf[SL_TRACKS][SL_HALF] __attribute__((section(".pool")));
 typedef struct {
     uint32_t pos, len;           /* samples into the step, its length */
     uint32_t base;               /* the step without swing */
@@ -91,7 +93,7 @@ static void sl_enter(const track_t *t, sl_t *s)
         s->rec_on = 1;
     } else if (s->rec >= 2u * SL_RAMP) {            /* a repeat: the last live step, looped */
         uint32_t l = s->base;
-        while (l > 2u * SL_LEN)
+        while (l > 2u * SL_HALF)
             l >>= 1;                                /* (a long step: a half, a quarter .. of it) */
         s->loop = l < 2u * s->rec ? l : 2u * s->rec;
     }
@@ -104,7 +106,7 @@ static inline __attribute__((always_inline)) void sl_seg(const track_t *t, sl_t 
                                                           int32_t *sd, uint32_t m)
 {
     uint32_t mode = (uint32_t)t->p[P_SLCR], j, nbit = (sl_pattern(t) >> ((s->idx + 1u) & 15u)) & 1u;
-    int32_t depth = t->p[P_SLDEPTH] * 258;          /* Q15, 0..32766 */
+    int32_t depth = t->p[P_SLDEPTH] * 258 * trk_fx_pct[t - trk] / 127;   /* Q15, scaled by FX% */
     int32_t tc = mode == SL_GATE && !s->bit ? depth : 0;           /* gate closure of this step */
     int32_t tn = mode == SL_GATE && !nbit ? depth : 0;             /* .. of the next one */
     int32_t tw = mode == SL_STUT && s->loop ? depth : 0;           /* repeat level */
@@ -127,7 +129,7 @@ static inline __attribute__((always_inline)) void sl_seg(const track_t *t, sl_t 
         if (s->rec_on) {                            /* 2:1, the pair's mean; Q15 >> 2 (the mix's headroom) */
             if ((s->pos + j) & 1u) {
                 buf[s->rec] = (int16_t)clamp((s->half + x) >> 3, -32768, 32767);
-                if (++s->rec >= SL_LEN)
+                if (++s->rec >= SL_HALF)
                     s->rec_on = 0;
             } else {
                 s->half = x;
@@ -137,7 +139,7 @@ static inline __attribute__((always_inline)) void sl_seg(const track_t *t, sl_t 
             uint32_t rp = s->rp, e = s->loop - 1u - rp;
             int32_t r = buf[rp >> 1];
             if (rp & 1u)
-                r = (r + buf[((rp >> 1) + 1u) & (SL_LEN - 1u)]) >> 1;
+                r = (r + buf[((rp >> 1) + 1u) & (SL_HALF - 1u)]) >> 1;
             r <<= 2;
             if (rp < e)
                 e = rp;
@@ -160,7 +162,7 @@ static void slicer_track(const track_t *t, int32_t *b, uint32_t n)
 {
     uint32_t k = (uint32_t)(t - trk), i = 0;
     sl_t *s = &sl[k];
-    int act = b && (t->p[P_SLCR] != SL_OFF || s->gc || s->w);
+    int act = b && k < SL_TRACKS && (t->p[P_SLCR] != SL_OFF || s->gc || s->w);
     while (i < n) {
         uint32_t m;
         if (s->pos >= s->len)
@@ -180,7 +182,7 @@ static __attribute__((noinline)) void slicer_track_sd(const track_t *t, int32_t 
 {
     uint32_t k = (uint32_t)(t - trk), i = 0;
     sl_t *s = &sl[k];
-    int act = t->p[P_SLCR] != SL_OFF || s->gc || s->w;
+    int act = k < SL_TRACKS && (t->p[P_SLCR] != SL_OFF || s->gc || s->w);
     while (i < n) {
         uint32_t m;
         if (s->pos >= s->len)
