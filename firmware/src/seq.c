@@ -847,8 +847,10 @@ static void keyboard_block(void)
         if (!((ch >> k) & 1u))
             continue;
         if ((cur >> k) & 1u) {                    /* the selected track; the key-up goes to the same one */
+            if ((kb_held_mask >> k) & 1u)         /* re-press while held: release the deferred note first */
+                key_off(k, &trk[kb_trk[k] % NTRK]);
             kb_trk[k] = song.sel;
-            kb_held_mask &= ~(1u << k);            /* re-press: cancel any deferred hold on this key */
+            kb_held_mask &= ~(1u << k);
             if (kb_asleep) {                      /* (SCREEN OFF: the wake press is swallowed) */
                 kb_note[k] = KB_SILENT;
                 continue;
