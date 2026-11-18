@@ -455,7 +455,7 @@ static void trk_note_on(track_t *t, uint32_t note, uint32_t vel)
             t->lfo_ph = (uint32_t)t->p[P_LPHASE] << 25;
         t->lfo_fade = 0;
         if (!t->p[P_L2TRIG])
-            t->lfo2_ph = 0u;
+            t->lfo2_ph = (uint16_t)((uint32_t)t->p[P_L2PHASE] << 9);
     }
     if (mode == V_POLY) {
         voice_t *v = voice_alloc(t, note);

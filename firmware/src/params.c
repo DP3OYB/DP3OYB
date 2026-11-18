@@ -184,7 +184,8 @@ static const param_desc_t TP[P_COUNT] = {
     [P_L2WAVE] = PE("WAVE", N_LWAVE, 1),
     [P_L2SYNC] = PE("SYNC", N_LSYNC, 0),
     [P_L2TRIG] = PE("TRIG", N_LTRIG, 0),
-    [P_L2POL]  = PE("POL",  N_LPOL,  1),              /* 2LFO polarity: UNI default */
+    [P_L2POL]   = PE("POL",  N_LPOL,  1),             /* 2LFO polarity: UNI default */
+    [P_L2PHASE] = PD("PHS", F_INT, 0, 127, 0),
     [P_SOFF] = PD("ROTA", F_INT, -32, 32, 0),  /* loop phase offset (TRACKS K3; steps; 0 = normal start) */
 };
 
@@ -468,9 +469,9 @@ static const page_t PAGES[] = {
     {"ENV", FAM_ENV, SC_TRACK, GR_ADSR, {P_ATK, P_DEC, P_SUS, P_REL}},
     {"ENV DEST", FAM_ENV, SC_TRACK, GR_NONE, {P_ED_FLT, P_ED_PIT, P_ED_SHP, P_ESYNC}},   /* (P_ED_FX: nothing reads it);
                                                                              * 1.5: ESYNC, ENV's times as note values */
-    {"1LFO", FAM_LFO, SC_TRACK, GR_LFO, {P_LRATE, P_LWAVE, P_LPOL, 0xFF}},
+    {"1LFO", FAM_LFO, SC_TRACK, GR_LFO, {P_LRATE, P_LWAVE, P_LPOL, P_LPHASE}},
     {"1LFO AMT", FAM_LFO, SC_TRACK, GR_NONE, {P_LD_PIT, P_LD_FLT, P_LD_SHP, P_LD_AMP}},
-    {"2LFO", FAM_LFO, SC_TRACK, GR_LFO, {P_L2RATE, P_L2WAVE, P_L2POL, 0xFF}},
+    {"2LFO", FAM_LFO, SC_TRACK, GR_LFO, {P_L2RATE, P_L2WAVE, P_L2POL, P_L2PHASE}},
     {"MOD", FAM_LFO, SC_TRACK, GR_MOD, {0xFF, P_M1SRC, P_M1DST, P_M1AMT}},   /* KNOB 1: the slot (mod_ui_slot) */
     {"TRIGS", FAM_LFO, SC_TRACK, GR_NONE, {P_LSYNC, P_LTRIG, P_L2SYNC, P_L2TRIG}},
     {"FX", FAM_FX, SC_TRACK, GR_FX, {P_DIST, P_CHOR, P_DLY, P_REV}},

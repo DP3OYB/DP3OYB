@@ -106,6 +106,7 @@ enum {                          /* per-track parameters */
     P_ATSNS, P_ATDST, P_ATAMT,                 /* 1.8: AFTERTOUCH: the keys' pressure (keytouch.c) and its routing (mod.c) */
     P_L2RATE, P_L2WAVE, P_L2SYNC, P_L2TRIG,   /* 2LFO: RATE WAVE SYNC(note value or OFF) TRIG(NOTE/FREE) POL(BI/UNI) */
     P_L2POL,                                   /* 2LFO polarity: 0=BI, 1=UNI (default) */
+    P_L2PHASE,                                 /* 2LFO start phase 0-127 */
     P_E0, P_E1, P_E2, P_E3, P_E4, P_E5, P_E6, P_E7,
     P_COUNT
 };

@@ -81,7 +81,7 @@ static void graph_lfo(const track_t *t, uint16_t c)
     int32_t rate  = lfo2 ? t->p[P_L2RATE] : t->p[P_LRATE];
     int32_t lsync = lfo2 ? t->p[P_L2SYNC] : t->p[P_LSYNC];
     int32_t x, cy = graph_ht / 2, a = 38 * graph_ht / 100, py = cy;
-    int uni = lfo2 || t->p[P_LPOL] != 0;
+    int uni = lfo2 ? t->p[P_L2POL] != 0 : t->p[P_LPOL] != 0;
     int32_t z = uni ? cy + a : cy;
     cv_rect(PANEL_X0, z, PANEL_W, 1, T_RAISE);
 
@@ -91,7 +91,7 @@ static void graph_lfo(const track_t *t, uint16_t c)
     uint32_t inc_per_px = sync ? (0xFFFFFFFFu / (PANEL_W / 2u))
                                : (uint32_t)((uint64_t)LFO_INC[rate & 127] * 2756u / PANEL_W);
     uint32_t rnd = lfo2 ? 0u : t->lfo_rnd;
-    uint32_t ph = lfo2 ? 0u : (uint32_t)t->p[P_LPHASE] << 25;
+    uint32_t ph = (uint32_t)t->p[lfo2 ? P_L2PHASE : P_LPHASE] << 25;
 
     /* FADE: 1LFO only */
     int32_t fade_step = (!lfo2 && t->p[P_LFADE]) ? (int32_t)(ENV_LIN[t->p[P_LFADE] & 127] >> 9) : 0;
@@ -429,17 +429,36 @@ static void graph_detail(const track_t *t, uint16_t c)
         }
     }
 }
-/* SCL: the 12 keys as rounded bars (black keys high, white keys low): in the scale THEME, the root the
- * accent, out of the scale RAISE */
+/* SCL: 2-octave keyboard F..G (16 white + 11 black keys).
+ * T_BG fills the frame and all gaps between keys.
+ * Unlit keys (white & black): T_RAISE.  In-scale: c.  Root: T_ACCENT. */
 static void graph_scale(const track_t *t, uint16_t c)
 {
-    static const uint8_t BLACK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};
-    uint32_t i, mask = scale_mask(t);
-    for (i = 0; i < 12u; i++) {
-        uint32_t deg = (i + 12u - (uint32_t)t->p[P_ROOT]) % 12u;
-        int32_t x = 13 + (int32_t)i * 18;
-        uint16_t col = (mask >> deg) & 1u ? (deg == 0u ? T_ACCENT : c) : T_RAISE;
-        cv_rrect(x + 3, BLACK[i] ? 6 : 38, 10, 52, 3, col, T_SURF);
+    static const uint8_t W_SEMI[16] = {5,7,9,11,0,2,4,5,7,9,11,0,2,4,5,7};
+    static const int8_t  B_SEMI[15] = {6,8,10,-1,1,3,-1,6,8,10,-1,1,3,-1,6};
+    uint32_t mask = scale_mask(t), root = (uint32_t)t->p[P_ROOT], deg;
+    /* keyboard: 222 px wide (16 × 14 − 2), 56 px tall; centred in the 100 px band */
+    int32_t x0 = PANEL_X0 - 1;  /* x=9 */
+    int32_t y0 = 22;             /* relative to cv_oy=GOY */
+    int32_t i;
+
+    cv_rect(x0, y0, 222, 56, T_BG);  /* frame + all inter-key gaps */
+
+    /* white keys: 11 × 54, inset 1 px from frame edges */
+    for (i = 0; i < 16; i++) {
+        deg = ((uint32_t)W_SEMI[i] + 12u - root) % 12u;
+        uint16_t col = deg == 0u ? T_ACCENT : ((mask >> deg) & 1u ? c : T_RAISE);
+        cv_rect(x0 + i * 14 + 1, y0 + 1, 11, 54, col);
+    }
+    /* black keys: 8 × 32, drawn on top; T_BG outline separates them from white keys */
+    for (i = 0; i < 15; i++) {
+        uint32_t semi;
+        if (B_SEMI[i] < 0) continue;
+        semi = (uint32_t)B_SEMI[i];
+        deg  = (semi + 12u - root) % 12u;
+        uint16_t col = deg == 0u ? T_ACCENT : ((mask >> deg) & 1u ? c : T_RAISE);
+        cv_rect(x0 + i * 14 + 8, y0 + 1, 10, 33, T_BG);  /* 1 px gap on sides + bottom */
+        cv_rect(x0 + i * 14 + 9, y0 + 1, 8, 32, col);
     }
 }
 /* CHORD (SCL 2): the chord's name ("Cm7": the last one the track played; before any, the one on its ROOT from
@@ -568,7 +587,7 @@ static void graph_mod(const track_t *t, uint16_t c)
     uint32_t k;
     for (k = 0; k < NMSLOT; k++) {
         const int16_t *p = &t->p[P_M1SRC + 3u * k];
-        int32_t y = 14 + (int32_t)k * 24, on = p[0] && p[1] && p[2], sel = k == mod_ui_slot, x;
+        int32_t y = 44 + (int32_t)k * 16, on = p[0] && p[1] && p[2], sel = k == mod_ui_slot, x;
         uint16_t bg = sel ? T_THEME : T_SURF, col = sel ? T_INK : on ? c : T_DIM;
         char b[8];
         const char *unit;
@@ -2153,7 +2172,7 @@ static void graph_scope(uint16_t c)
 {
     static int16_t snap[SCOPE_N] __attribute__((section(".pool")));
     uint32_t w = scope_w, i, trig = 0;
-    int32_t cy = (int32_t)cv_h / 2, py = cy, x, peak = 1500, a = cv_h == H_GRAPH ? 46 : cy - 6;   /* (LARGE: the strip) */
+    int32_t cy = (int32_t)cv_h / 2, py = cy, x, peak = 1500, a = cv_h == H_GRAPH ? 46 * graph_ht / 100 : cy - 6;   /* (LARGE: the strip) */
     for (i = 0; i < SCOPE_N; i++) {
         snap[i] = scope_buf[(w + i) & (SCOPE_N - 1u)];
         if (snap[i] > peak)
@@ -2464,6 +2483,202 @@ static void graph_song(void)
                      i < CHAIN_SILENT ? "[K3] ADD SECTION" : "[SAVE] PROJECT A-E", T_MID, T_SURF, x0 - 10 - SG_X0);
     }
 }
+/* TRIGS page: dual-LFO visualisation (FAM_LFO GR_NONE page with P_LSYNC as first param).
+ * Shows two header boxes (1LFO / 2LFO) with SYNC and TRIG values, connecting lines,
+ * and a shared overlaid chart with both waveforms.  X-axis = 2 bars at 120 BPM. */
+static void graph_trigs(const track_t *t)
+{
+    /* layout constants (y relative to cv_oy which is 30 for TRIGS) */
+    enum {
+        HDR_Y  = 2,  HDR_H = 18,            /* header boxes */
+        CH_X   = 5,  CH_W  = 230,           /* chart x */
+        CH_Y   = 24, CH_H  = 63,            /* chart y/height */
+        L_X0   = 5,  L_X1  = 116,           /* 1LFO box */
+        R_X0   = 118, R_X1 = 234,           /* 2LFO box */
+        MID_X  = CH_X + CH_W / 2            /* chart midpoint x */
+    };
+    /* SYNC → cycles×2 per 2-bar window (index 0 = OFF → use rate).
+     * inc = 0xFFFFFFFF * SYNC_CYCS2[si] / 2 / CH_W  */
+    static const int32_t SYNC_CYCS2[11] = {0, 1, 2, 4, 8, 16, 32, 48, 64, 96, 128};
+    /* TRIG → marker period in pixels for 2-bar window (0 = no markers visible) */
+    static const int32_t TRIG_PX[12]    = {0, 0, 460, 230, 115, 57, 29, 14, 10, 7, 5, 4};
+
+    int32_t sync1 = t->p[P_LSYNC],  trig1 = t->p[P_LTRIG];
+    int32_t sync2 = t->p[P_L2SYNC], trig2 = t->p[P_L2TRIG];
+    int32_t wave1 = t->p[P_LWAVE],  rate1 = t->p[P_LRATE];
+    int32_t wave2 = t->p[P_L2WAVE], rate2 = t->p[P_L2RATE];
+    int32_t hot = ui.hot_t > 0;
+    int32_t hot1 = hot && ui.hot_col <= 1;
+    int32_t hot2 = hot && ui.hot_col >= 2;
+    uint16_t bg1  = hot1 ? T_REC : T_BG;
+    uint16_t bg2  = hot2 ? T_REC : T_BG;
+    uint16_t acc1 = hot1 ? T_INK : T_ACCENT;
+    uint16_t acc2 = hot2 ? T_INK : T_MID;
+    uint16_t lbl1 = hot1 ? T_INK : T_TEXT;
+    uint16_t lbl2 = hot2 ? T_INK : T_TEXT;
+    int32_t  ch_bot = CH_Y + CH_H - 1;
+    int32_t  x, y;
+
+    /* --- header boxes (dark bg + accent frame) --- */
+    cv_rect(L_X0, HDR_Y, L_X1 - L_X0 + 1, HDR_H, bg1);
+    cv_rect(R_X0, HDR_Y, R_X1 - R_X0 + 1, HDR_H, bg2);
+    if (!hot1) cv_frame(L_X0, HDR_Y, L_X1 - L_X0 + 1, HDR_H, T_ACCENT);
+    if (!hot2) cv_frame(R_X0, HDR_Y, R_X1 - R_X0 + 1, HDR_H, T_MID);
+    {
+        int32_t ty = HDR_Y + CAP_IN(S, HDR_H);
+        int32_t tx;
+        tx = cv_text_on(L_X0 + 3,  ty, &AF_S, "1LFO", acc1, bg1);
+        tx = cv_text_on(tx + 12,   ty, &AF_S, N_LSYNC[clamp(sync1, 0, 10)], acc1, bg1);
+             cv_text_on(tx + 12,   ty, &AF_S, N_LTRIG[clamp(trig1, 0, 11)], acc1, bg1);
+        tx = cv_text_on(R_X0 + 3,  ty, &AF_S, "2LFO", acc2, bg2);
+        tx = cv_text_on(tx + 12,   ty, &AF_S, N_LSYNC[clamp(sync2, 0, 10)], acc2, bg2);
+             cv_text_on(tx + 12,   ty, &AF_S, N_LTRIG[clamp(trig2, 0, 11)], acc2, bg2);
+    }
+
+    /* --- connecting lines: box bottom-edges to chart top --- */
+    for (y = HDR_Y + HDR_H; y < CH_Y; y++) {
+        cv_pset(L_X0,  y, T_ACCENT);
+        cv_pset(R_X1,  y, T_MID);
+    }
+
+    /* --- chart border: left half T_ACCENT, right half T_MID --- */
+    cv_rect(CH_X,            CH_Y,   MID_X - CH_X,        1, T_ACCENT);
+    cv_rect(MID_X,           CH_Y,   CH_X + CH_W - MID_X, 1, T_MID);
+    cv_rect(CH_X,            ch_bot, MID_X - CH_X,        1, T_ACCENT);
+    cv_rect(MID_X,           ch_bot, CH_X + CH_W - MID_X, 1, T_MID);
+    cv_rect(CH_X,            CH_Y,   1, CH_H, T_ACCENT);
+    cv_rect(CH_X + CH_W - 1, CH_Y,   1, CH_H, T_MID);
+
+    /* --- measure number labels: 0 (left), 1 (center), 2 (right) --- */
+    {
+        int32_t ly = CH_Y + 1 + CAP_IN(S, 8);
+        cv_text_on(CH_X + 2,            ly, &AF_S, "0", T_DIM, T_SURF);
+        cv_text_on(CH_X + CH_W / 2 + 3, ly, &AF_S, "1", T_DIM, T_SURF);
+        cv_text_on(CH_X + CH_W - 9,     ly, &AF_S, "2", T_DIM, T_SURF);
+    }
+
+    /* --- bar markers: 3px-wide dotted vertical lines at bar 0, 1, 2 --- */
+    {
+        int32_t bar_xs[3] = {CH_X + 1, CH_X + CH_W / 2 - 1, CH_X + CH_W - 4};
+        int32_t i;
+        for (i = 0; i < 3; i++)
+            for (y = CH_Y + 2; y < ch_bot - 1; y += 6)
+                cv_rect(bar_xs[i], y, 3, 3, T_DIM);
+    }
+
+    /* --- waveforms (both overlaid, full chart height) --- */
+    {
+        /* phase increments for 2-bar window at 120BPM: 5513 blocks in 4s (44100Hz / 32 blk) */
+        uint32_t inc1 = sync1
+            ? (uint32_t)((uint64_t)0xFFFFFFFFu * (uint32_t)SYNC_CYCS2[clamp(sync1, 0, 10)] / 2u / CH_W)
+            : (uint32_t)((uint64_t)LFO_INC[rate1 & 127] * 5513u / CH_W);
+        uint32_t inc2 = sync2
+            ? (uint32_t)((uint64_t)0xFFFFFFFFu * (uint32_t)SYNC_CYCS2[clamp(sync2, 0, 10)] / 2u / CH_W)
+            : (uint32_t)((uint64_t)LFO_INC[rate2 & 127] * 5513u / CH_W);
+        int32_t tpx1 = TRIG_PX[clamp(trig1, 0, 11)];
+        int32_t tpx2 = TRIG_PX[clamp(trig2, 0, 11)];
+        int32_t cy   = CH_Y + CH_H / 2;
+        int32_t amp  = CH_H / 2 - 4;
+        int32_t py1  = cy, py2 = cy;
+        uint32_t ph1 = 0, ph2 = 0;
+
+        for (x = 0; x < CH_W - 2; x++) {
+            if (tpx1 > 0 && x > 0 && x % tpx1 == 0) ph1 = 0;
+            if (tpx2 > 0 && x > 0 && x % tpx2 == 0) ph2 = 0;
+
+            int32_t w1 = lfo_wave_gen((uint32_t)wave1, t->lfo_rnd, ph1);
+            int32_t w2 = lfo_wave_gen((uint32_t)wave2, 0u,         ph2);
+            int32_t y1 = cy - w1 * amp / 32768;
+            int32_t y2 = cy - w2 * amp / 32768;
+            if (y1 < CH_Y + 1) y1 = CH_Y + 1; if (y1 > ch_bot - 1) y1 = ch_bot - 1;
+            if (y2 < CH_Y + 1) y2 = CH_Y + 1; if (y2 > ch_bot - 1) y2 = ch_bot - 1;
+
+            int32_t lo, hi, px = CH_X + 1 + x;
+            lo = py1 < y1 ? py1 : y1; hi = py1 > y1 ? py1 : y1;
+            for (y = lo; y <= hi; y++) cv_pset(px, y, T_ACCENT);
+            lo = py2 < y2 ? py2 : y2; hi = py2 > y2 ? py2 : y2;
+            for (y = lo; y <= hi; y++) cv_pset(px, y, T_MID);
+            py1 = y1; py2 = y2;
+            ph1 += inc1; ph2 += inc2;
+        }
+
+        /* --- trig markers: 1LFO upper half, 2LFO lower half --- */
+        int32_t mid_y = CH_Y + CH_H / 2;
+        if (tpx1 > 1) {
+            for (x = tpx1; x < CH_W - 2; x += tpx1)
+                for (y = CH_Y + 1; y < mid_y; y++)
+                    cv_pset(CH_X + 1 + x, y, T_ACCENT);
+        }
+        if (tpx2 > 1) {
+            for (x = tpx2; x < CH_W - 2; x += tpx2)
+                for (y = mid_y; y < ch_bot; y++)
+                    cv_pset(CH_X + 1 + x, y, T_MID);
+        }
+    }
+}
+
+/* 5-page tab indicator for FAM_LFO pages: page names at top of canvas, no borders.
+ * Active page: T_REC ink.  Inactive pages: T_TEXT ink.  Background: T_SURF (transparent). */
+static void draw_lfo_tabs(void)
+{
+    uint32_t i;
+    int32_t active = -1, tab = 0, old_oy = cv_oy;
+    const char *names[5];
+
+    for (i = 0; i < NPAGES && tab < 5; i++) {
+        if (PAGES[i].fam == FAM_LFO) {
+            if (i == (uint32_t)ui.page) active = tab;
+            names[tab++] = PAGES[i].title;
+        }
+    }
+
+    cv_oy = 0;
+
+    /* ---- page name labels ---- */
+    for (i = 0; i < (uint32_t)tab; i++) {
+        int32_t bx = (int32_t)i * 48;
+        uint16_t ink = (int32_t)i == active ? T_REC : T_TEXT;
+        cv_text_in(bx, 3 + CAP_IN(S, 13), 48, &AF_S, names[i], ink, T_SURF);
+    }
+
+    /* ---- arrow bar: 9px boxes at y=18..26, chevron diagonals, connecting line ---- */
+    {
+        int32_t seg_start = 5;
+        for (i = 0; i < (uint32_t)tab; i++) {
+            int32_t bx = (int32_t)i * 48 + 20;   /* box left edge, centred in 48px slot */
+            /* box outline */
+            cv_rect(bx,     18, 9, 1, T_TEXT);
+            cv_rect(bx,     26, 9, 1, T_TEXT);
+            cv_rect(bx,     19, 1, 7, T_TEXT);
+            cv_rect(bx + 8, 19, 1, 7, T_TEXT);
+            if ((int32_t)i == active)
+                cv_rect(bx + 1, 19, 7, 7, T_REC);
+            /* chevron diagonals pointing into the box from the left */
+            cv_pset(bx - 6, 19, T_TEXT);
+            cv_pset(bx - 5, 20, T_TEXT);
+            cv_pset(bx - 4, 21, T_TEXT);
+            cv_pset(bx - 4, 23, T_TEXT);
+            cv_pset(bx - 5, 24, T_TEXT);
+            cv_pset(bx - 6, 25, T_TEXT);
+            /* bar segment before this box */
+            int32_t gap_x = bx - 2;
+            if (gap_x > seg_start)
+                cv_rect(seg_start, 21, gap_x - seg_start, 2, T_TEXT);
+            /* bar through box */
+            cv_rect(bx,     21, 1, 2, T_TEXT);
+            cv_rect(bx + 8, 21, 1, 2, T_TEXT);
+            if ((int32_t)i == active)
+                cv_rect(bx + 1, 21, 7, 2, T_REC);
+            seg_start = bx + 9;
+        }
+        /* trailing bar after last box */
+        if (235 > seg_start)
+            cv_rect(seg_start, 21, 235 - seg_start, 2, T_TEXT);
+    }
+
+    cv_oy = old_oy;
+}
+
 static void draw_graph(void)
 {
     const page_t *pg = cur_page();
@@ -2512,6 +2727,7 @@ static void draw_graph(void)
             graph_adsr(t, c);
             break;
         case GR_LFO:
+            cv_oy += 18;                                 /* wave sits 18 px lower than the ADSR */
             graph_lfo(t, c);
             break;
         case GR_ROLL:
@@ -2592,10 +2808,16 @@ static void draw_graph(void)
             else if ((pg->scope == SC_ENGINE || pg->id[0] == P_FM1_LEVEL) && t->eng_req % NENGINES == ENGI_DIGITAL)
                 graph_fm(t, c);                      /* (OP LEVEL too: the levels on the chart) */
 #endif
+            else if (pg->fam == FAM_LFO) {
+                if (pg->id[0] == P_LSYNC) { cv_oy = 30; graph_trigs(t); }
+                else { cv_oy = 18; graph_ht = 83; graph_scope(c); graph_ht = 100; }
+            }
             else { cv_oy = 0; graph_scope(c); }
             break;
         }
     }
     cv_oy = 0;
+    if (pg->fam == FAM_LFO && !ui.home && strip_kind() == SK_NONE)
+        draw_lfo_tabs();
     cv_blit(0, graph_y());
 }
