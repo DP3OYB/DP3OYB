@@ -27,25 +27,37 @@ static void graph_adsr(const track_t *t, uint16_t c)
     int32_t top = 6 * graph_ht / 100, bot = 88 * graph_ht / 100, sus = t->p[pg->id[2]] * 1000 / 127;   /* 0..1000 */
     int32_t x0 = 12, x1 = x0 + a, x3 = 226 - r, i, px, py;
     int32_t e = 32768;                                                  /* exp(-4.6 u), Q15 */
+    int16_t env_top[PANEL_W];
 #define EGY(lvl) (bot - (lvl) * (bot - top) / 1000)
+    for (i = 0; i < PANEL_W; i++) env_top[i] = (int16_t)bot;
     cv_rect(PANEL_X0, bot + 2, PANEL_W, 1, T_RAISE);
     /* area fill: attack */
-    for (i = 0; i <= a; i++)
-        ENV_FILL(x0 + i, bot - (bot - top) * i / a);
+    for (i = 0; i <= a; i++) {
+        int32_t ey = bot - (bot - top) * i / a;
+        ENV_FILL(x0 + i, ey);
+        env_top[(x0 + i) - PANEL_X0] = (int16_t)ey;
+    }
     /* area fill: decay */
     e = 32768;
     for (i = 1; i <= d; i++) {
-        int32_t lvl; e = (e * (32768 - 150733 / d)) >> 15;
+        int32_t lvl, ey; e = (e * (32768 - 150733 / d)) >> 15;
         lvl = sus + ((1000 - sus) * e >> 15);
-        ENV_FILL(x1 + i, EGY(lvl));
+        ey = EGY(lvl);
+        ENV_FILL(x1 + i, ey);
+        env_top[(x1 + i) - PANEL_X0] = (int16_t)ey;
     }
     /* area fill: sustain */
-    for (i = x1 + d; i <= x3; i++) ENV_FILL(i, EGY(sus));
+    for (i = x1 + d; i <= x3; i++) {
+        ENV_FILL(i, EGY(sus));
+        env_top[i - PANEL_X0] = (int16_t)EGY(sus);
+    }
     /* area fill: release */
     e = 32768;
     for (i = 1; i <= r; i++) {
-        e = (e * (32768 - 150733 / r)) >> 15;
-        ENV_FILL(x3 + i, EGY(sus * e >> 15));
+        int32_t ey; e = (e * (32768 - 150733 / r)) >> 15;
+        ey = EGY(sus * e >> 15);
+        ENV_FILL(x3 + i, ey);
+        env_top[(x3 + i) - PANEL_X0] = (int16_t)ey;
     }
     /* curve lines on top */
     cv_line_t(x0, bot, x1, top, c, 2);                                  /* attack: linear */
@@ -69,6 +81,29 @@ static void graph_adsr(const track_t *t, uint16_t c)
         cv_line_t(px, py, x3 + i, EGY(sus * e >> 15), c, 2);
         px = x3 + i;
         py = EGY(sus * e >> 15);
+    }
+    /* scope overlay: oscilloscope fitted inside the envelope fill; y=0 at mid-height of envelope */
+    {
+        uint32_t sw = scope_w, strig = 0;
+        int32_t speak = 1500, spy = -1;
+        for (i = 0; i < (int32_t)SCOPE_N; i++) {
+            int16_t s = scope_buf[(sw + (uint32_t)i) & (SCOPE_N - 1u)];
+            if (s > speak) speak = s; else if (-s > speak) speak = -s;
+        }
+        for (i = 1; i < (int32_t)(SCOPE_N - 240u); i++) {
+            if (scope_buf[(sw + (uint32_t)(i - 1)) & (SCOPE_N - 1u)] < 0 &&
+                scope_buf[(sw + (uint32_t)i) & (SCOPE_N - 1u)] >= 0) { strig = (uint32_t)i; break; }
+        }
+        for (i = 0; i < PANEL_W; i++) {
+            int16_t s = scope_buf[(sw + strig + (uint32_t)i) & (SCOPE_N - 1u)];
+            int32_t et = env_top[i], mid = (et + bot) / 2, amp = (bot - et) / 2;
+            int32_t sy = mid - s * amp / speak;
+            if (sy < et) sy = et;
+            if (sy > bot) sy = bot;
+            if (i && spy >= 0)
+                cv_line_t(PANEL_X0 - 1 + i, spy, PANEL_X0 + i, sy, c, 1);
+            spy = sy;
+        }
     }
 #undef EGY
 }
@@ -1272,7 +1307,7 @@ static uint32_t graph_signature(void)
     h ^= (uint32_t)pg->graph * 131u + TSEL->eng_req + song.sel * 7777u + ui.page * 1291u;
     if (strip_kind() == SK_TITLE)                    /* MENU > LARGE: the page's title (its engine, its number) */
         return h ^ 0x5A17u;
-    if (pg->graph == GR_NONE || pg->graph == GR_ARP) h ^= ui.frame / 2u;
+    if (pg->graph == GR_NONE || pg->graph == GR_ARP || pg->graph == GR_ADSR) h ^= ui.frame / 2u;
     for (i = 0; i < P_COUNT; i++)
         h = (h ^ (uint32_t)t->p[i]) * 16777619u;
     h ^= (uint32_t)TSEL->preset * 7u + (uint32_t)song.g[G_SLOT] * 13u + TSEL->user * 257u + up_gen * 7919u + ui.uslot * 104729u +
