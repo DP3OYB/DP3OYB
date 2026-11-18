@@ -1,7 +1,9 @@
 {
-  "what": "A 6-track performance groovebox that's both versatile and easy to use. Enhanced from Felucca, DP3OYB adds features and intuitive controls to let you create what you want, whenever you want, without the box getting in the way.",
-  "author": "powerofyourbrains",
-  "kinds": "groove",
+  "what": "A 6-track performance groovebox enhanced from Felucca. Adds 2 LFOs with sequencer trigs, retriggering envelopes, a mixer and track sequencing with quick-access controls, and a redesigned UI for live use.",
+  "author": "DP3OYB",
+  "kinds": ["groove"],
   "play": "https://dp3oyb.github.io/DP3OYB/try/",
-"sounds": "licensed: Felucca (github.com/hugelton/Felucca), GPL-3.0"
+  "image": "docs/thumbnail.png",
+  "color": "#0D1F3C",
+  "sounds": "CC0: Hügelton Sample Pack, Versilian Studios VSCO-2 CE and VCSL"
 }
