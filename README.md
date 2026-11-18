@@ -2,7 +2,7 @@
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
-DP3OYB is a fork of [Felucca](https://github.com/hugelton/Felucca) firmware for the M-VAVE FM-1 with a redesigned UI optimized for live performance and for use as a micro-DAW. DP3OYB features 6 tracks, 2 LFOs with trig logic, a mod matrix, enhanced envelope and mod capabilities, mixer and multitrack views with quick-access performance controls - in addition to other parameters, visual feedback, and UI optimization. Current version: **1.0.0**
+A 6-track performance groovebox that's versatile and easy to use. Enhanced from [Felucca](https://github.com/hugelton/Felucca), DP3OYB adds intuitive navigation and powerful features such as 2 LFOs with sequencer trigs, retriggering envelopes, a mixer and track sequencing with quick-access controls, and more. Create what you want, whenever you want, without the box getting in the way. Current version: **1.0.0**
 
 [Try it in your browser](https://DP3OYB.github.io/DP3OYB/try/) — no FM-1 needed.
 
