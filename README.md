@@ -2,7 +2,7 @@
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
-A 6-track performance groovebox that's versatile and easy to use. Enhanced from [Felucca](https://github.com/hugelton/Felucca), DP3OYB adds intuitive navigation and powerful features such as 2 LFOs with sequencer trigs, retriggering envelopes, a mixer and track sequencing with quick-access controls, and more. Create what you want, whenever you want, without the box getting in the way. Current version: **1.0.0**
+A 6-track performance groovebox enhanced from [Felucca](https://github.com/hugelton/Felucca). Adds 2 LFOs with sequencer trigs, retriggering envelopes, mixer and track sequencing views with quick-access controls, multi-track note hold, LED-assisted chord-mode, and a redesigned UI optimized for live use. Current version: **1.0.1**
 
 [Try it in your browser](https://DP3OYB.github.io/DP3OYB/try/) — no FM-1 needed.
 

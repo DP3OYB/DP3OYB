@@ -1,5 +1,5 @@
 {
-  "what": "A 6-track performance groovebox enhanced from Felucca. Adds 2 LFOs with sequencer trigs, retriggering envelopes, a mixer and track sequencing with quick-access controls, and a redesigned UI for live use.",
+  "what": "A 6-track performance groovebox enhanced from Felucca. Adds 2 LFOs with sequencer trigs, retriggering envelopes, mixer and track sequencing views with quick-access controls, multi-track note hold, LED-assisted chord-mode, and a redesigned UI optimized for live use.",
   "author": "DP3OYB",
   "kinds": ["groove"],
   "play": "https://dp3oyb.github.io/DP3OYB/try/",
