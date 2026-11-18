@@ -327,8 +327,8 @@ static uint32_t scale_leds(uint32_t *root)
     uint32_t k, m = 0, r = 0, mask = scale_mask(t), note;
     int32_t pc;
     *root = 0;
-    /* always filter when a non-chromatic scale is active; respect the pref for CHR */
-    if (!(ui_rec_prefs & (PREF_SCALE_LEDS >> 8)) && mask == 0xFFFu)
+    /* always show on the SCL page; for other pages filter CHR when the pref is off */
+    if (!(ui_rec_prefs & (PREF_SCALE_LEDS >> 8)) && mask == 0xFFFu && cur_fam() != FAM_SCL)
         return 0;
     for (k = 0; k < 27u; k++) {
         if (e->keys && e->keys(t, k) >= 0)
