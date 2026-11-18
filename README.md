@@ -18,8 +18,6 @@ Installing is at your own risk. M-VAVE's updater or the FM-1 factory restore ret
 
 ## Controls
 
-![FM-1 controls](docs/controls.jpg)
-
 ### Knobs
 
 | Control | Action |
