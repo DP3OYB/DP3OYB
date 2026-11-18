@@ -1,63 +1,229 @@
-# Felucca
+# DP3OYB
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
-![Felucca screens: HOME, tracks, WHEEL, FM6, slices, piano roll, drum grid and song](docs/screens.png)
+DP3OYB is a fork of [Felucca](https://github.com/hugelton/Felucca) firmware for the M-VAVE FM-1 with a redesigned UI optimized for live performance and for use as a micro-DAW. DP3OYB features 6 tracks, 2 LFOs with trig logic, a mod matrix, enhanced envelope and mod capabilities, mixer and multitrack views with quick-access performance controls - in addition to other parameters, visual feedback, and UI optimization. Current version: **1.0.0**
 
-## Overview
+[Try it in your browser](https://DP3OYB.github.io/DP3OYB/try/) — no FM-1 needed.
 
-Felucca is an open-source synthesizer firmware project that began as custom firmware for the M-VAVE FM-1.
+## Install
 
-Originally developed for a single instrument, Felucca is evolving toward a multi-platform architecture, separating its synthesis engines from hardware-specific implementations. The aim is to make its instruments and sound engines adaptable to different hardware platforms without committing to specific ports or release schedules.
+Back up your FM-1 flash before installing. Use [M-Flasher](https://m-vave.com) or the upstream [Felucca installer](https://hugelton.github.io/Felucca/) as a reference for how to flash a `.fwsc` file over USB.
 
-### M-VAVE FM-1
+1. Download the latest `felucca-X.Y.fwsc` from the [Releases](https://github.com/DP3OYB/DP3OYB/releases) page.
+2. Connect the FM-1 by USB to Chrome or Edge.
+3. Flash using M-Flasher or `tools/fm1_install.py`.
 
-The FM-1 firmware is currently at version 1.8.1 (1.9.0, with plugin engines, is in beta). Connect the FM-1 to a computer by USB, open the
-[web installer](https://hugelton.github.io/Felucca/) in Chrome or Edge and press Install; no extra hardware is needed.
-Installing is at your own risk: M-VAVE's updater or the installer's **Return to official V15** takes you back.
-[Try it in your browser](https://hugelton.github.io/Felucca/webapp/try/), no FM-1 needed.
+Installing is at your own risk. M-VAVE's updater or the FM-1 factory restore returns you to the official firmware.
 
-- Install: [web installer](https://hugelton.github.io/Felucca/)
-- Edit: [web editor](https://hugelton.github.io/Felucca/webapp/editor/) ([Felucca-WebApp](https://github.com/hugelton/Felucca-WebApp))
-- Read: the manual and the release notes are in the [wiki](https://github.com/hugelton/Felucca/wiki/Home)
-- Build: [BUILDING.md](BUILDING.md)
-- Platforms: the FM-1 (the reference; every release is tested on it) · the browser · a desktop with SDL2 (beta) · a
-  libretro core (beta). The same sources on each, with a simulated FM-1 for the platforms that are not one:
-  [platforms/](platforms/README.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/PORTING.md](docs/PORTING.md).
-- Plugins (from 1.9): sound engines that anyone can make and install without building a firmware:
-  [docs/PLUGINS.md](docs/PLUGINS.md).
-- Compatibility: what an update keeps (saved work, the controls, the plugin interface): [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
-- Related: [Felucca-Engines](https://github.com/hugelton/Felucca-Engines) (the ANALOG, LOFI, TRIO, WHEEL, NOISE and PHASE engines and the plugin interface, MIT; still maintained) ·
-  [felucca-bsp](https://github.com/hugelton/felucca-bsp) (the FM-1 hardware layer, MPL-2.0; Felucca builds on it from 1.7.0)
+## Controls
 
-## Platform Support
+![FM-1 controls](docs/controls.jpg)
 
-| Platform | Status | Notes |
+### Knobs
+
+| Control | Action |
+| --- | --- |
+| **SELECT** | Tempo (BPM) by default; MENU → SELECT reassigns it to mod wheel (MODW) or key velocity (VEL) |
+| **MASTER** | Volume |
+| **ALGORITHM** | Selected track (T1–T4), on every page |
+| **PRESETS** | Browse presets on HOME and SAVE pages; second cursor on other pages |
+| **KNOB 1–4** | The four parameters of the current page |
+
+### Page buttons
+
+Tap to go to that family's first page; tap again to step through its pages. The active family is highlighted.
+
+| Button | Family |
+| --- | --- |
+| **FX** | Effects, SLICER, INSERT, global DLY / REVERB / CHORUS |
+| **SCL** | Scale, chord keys |
+| **ENV** | Envelope, envelope destinations |
+| **LFO** | 1LFO, 2LFO, MOD matrix, TRIGS |
+| **EDIT** | Engine parameters, voice, ARP, SEQ steps |
+| **GLO** | Mixer, global, system (SONG) |
+| **HOME** | Home screen |
+| **SAVE** | Presets, user sounds, projects, tools |
+| **ARP** | Arpeggiator |
+| **SEQ** | Sequencer: steps, pattern |
+
+### Transport
+
+| Button | Action |
+| --- | --- |
+| **PLAY** | Start / stop; lit green while playing |
+| **REC** | Arm the track to record; if stopped, also starts playing |
+| **HOME** tap | Go to home screen / close dialog |
+| **HOME** hold | Open / close menu |
+| **SAVE** tap | Load preset / save |
+| **SAVE** hold | Undo last sound load; hold again to redo |
+
+### Octave
+
+| | Action |
+| --- | --- |
+| **OCT−** | Octave down; in dialogs and menus: back / cancel |
+| **OCT+** | Octave up; in dialogs and menus: confirm |
+| **OCT− + OCT+** | Octave reset |
+| OCT+ breathes | NOTE HOLD is active on the selected track |
+| OCT− breathes | ENV RETRIG is active on the selected track |
+
+### Hold layers
+
+Hold a button to open its layer, then use the keys and knobs. Release to close (changes revert); press **OCT+** before releasing to keep them. **OCT−** while a layer is open undoes / puts values back.
+
+| Hold | Keys do | Knobs do |
 | --- | --- | --- |
-| M-VAVE FM-1 | Supported | The original platform; firmware and web installer available. |
-| Browser | Supported | [Try it](https://hugelton.github.io/Felucca/webapp/try/), no FM-1 needed. |
-| Desktop (SDL2) | Beta | Source only, in [platforms/sdl](platforms/sdl/README.md); run on macOS so far, Linux next. |
-| libretro (RetroArch) | Beta | Source only, in [platforms/libretro](platforms/libretro/README.md); run in RetroArch on macOS so far. |
-| devkitPro (libctru) | Studied | Research only; nothing published. |
-| M5Stack CoreS3 | In progress | Runs on the device; not published yet. |
-| M-VAVE SMK-37 | Proposed | A board in [felucca-bsp#13](https://github.com/hugelton/felucca-bsp/issues/13); untested. |
-| Other hardware | Not yet supported | Ports are welcome! Linux-based devices: see the [FAQ](https://github.com/hugelton/Felucca/wiki/FAQ). |
+| **FX** | Performance effects; black keys mute tracks | FILTER · CRUSH · THROW · DEPTH (macros) |
+| **GLO** | Mute / solo; tap tempo | Selected track's engine knobs (TWIDDLE) |
+| **SCL** | A key sets the root | ROOT · SCALE · CHORD · VOICING |
+| **EDIT** | A white key picks the engine | ENG · No. · FAV (engine / preset select) |
+| **SEQ** | Step tools (Euclidean, etc.) | LEN · DIV · SWING · GATE |
+| **REC** | Recording settings | CLICK · COUNT-IN · LEVEL |
+| **LFO** *(momentary)* | — | Live-sweep any knob; values revert on release unless you press OCT+ first |
 
-Felucca began on the FM-1, but it is not intended to stay there. Contributions and ports to other platforms are very welcome. If you are interested in bringing Felucca to another device, feel free to open an issue or pull request to discuss it. No specific future ports or release dates are promised.
+### Combos
 
-## AI disclaimer
+| Combo | Action |
+| --- | --- |
+| **GLO** hold + **SELECT** | Set tempo (even with BPM LOCK) |
+| **GLO** hold + **PLAY** | Restart song from the top |
+| **FX** hold + **EDIT** | (FX LATCH mode) toggle all effects and macros off |
+| **REC** + **PLAY** | Play and keep REC armed |
+| **SEQ** hold + hold a step + **KNOB 1–4** | Lock that parameter value to the held step(s) |
+| **EDIT** while steps held | Clear locks on the held steps |
 
-Felucca is developed with the assistance of AI coding agents (code, tests, documentation, translation, maintenance). The
-design, features, sound design and direction are the maintainer's or the community's, and no generative AI is used for music,
-icons or artwork. See [On AI-Assisted Development and Responsibility](https://github.com/hugelton/Felucca/discussions/166).
+## Pages
+
+### ENV
+
+| k1 | k2 | k3 | k4 |
+| --- | --- | --- | --- |
+| ATK | DEC | SUS | REL |
+
+Attack, decay, sustain, release for the track envelope.
+
+**ENV DEST** sets the envelope's modulation targets: FLT · PIT · SHP · ESYNC.
+
+---
+
+### 1LFO
+
+| k1 | k2 | k3 | k4 |
+| --- | --- | --- | --- |
+| RATE | WAVE | POL | PHS |
+
+Waveforms: SIN · TRI · SAW · SQR · S&H · RSAW. Polarity: BI / UNI.
+
+**PHS** (0–127) sets the LFO's start phase on each note trigger, giving repeatable timbral movement.
+
+**1LFO AMT** sets modulation depth to: PIT · FLT · SHP · AMP.
+
+---
+
+### 2LFO
+
+| k1 | k2 | k3 | k4 |
+| --- | --- | --- | --- |
+| RATE | WAVE | POL | PHS |
+
+A second, independent LFO with the same waveform set as 1LFO.
+
+**PHS** (0–127) sets the 2LFO's start phase on each note trigger.
+
+---
+
+### TRIGS
+
+| k1 | k2 | k3 | k4 |
+| --- | --- | --- | --- |
+| 1LFO SYNC | 1LFO TRIG | 2LFO SYNC | 2LFO TRIG |
+
+Controls when each LFO resets. The graph shows both LFO waveforms over a two-bar window, with header boxes displaying the current SYNC and TRIG values.
+
+---
+
+### MOD
+
+| k1 | k2 | k3 | k4 |
+| --- | --- | --- | --- |
+| SLOT | SRC | DST | AMT |
+
+Free modulation matrix. SRC: OFF · 1LFO · ENV · VEL · KEY · RAND · MODW · AT · EXPR · S&H · SLEW · 2LFO.
+
+---
+
+### FX
+
+| k1 | k2 | k3 | k4 |
+| --- | --- | --- | --- |
+| DIST | CHOR | DLY | REV |
+
+Per-track effect send levels. Global effect parameters are on the DLY · REVERB · CHORUS pages.
+
+---
+
+### SCL
+
+| k1 | k2 | k3 | k4 |
+| --- | --- | --- | --- |
+| ROOT | SCALE | QUANT | TRANS |
+
+Scales: CHR · MAJ · MIN · DOR · MIX · PEN · MPEN · HARM · PHRY · LYD · LOC.
+
+The graph shows a full two-octave keyboard (F to G: 16 white keys, 11 black keys). Keys are coloured by role — root (accent), in-scale (highlighted), out-of-scale (dimmed). When a non-chromatic scale is active, pad LEDs for out-of-scale notes are suppressed automatically.
+
+**CHORD** sets chord type and voicing.
+
+---
+
+### EDIT pages
+
+Engine-specific parameters on EDIT 1 / EDIT 2 (eight knobs total). Additional pages appear for engines that need them: OPERATOR / OP ENV for FM6; SLICES for SLICE; LANES for DRUM; FILTER for ANALOG.
+
+**VOICE** / **VOICE 2** / **VOICE 3** control polyphony, glide, pan, spread, and aftertouch.
+
+---
+
+### GLO · SAVE · ARP
+
+**SONG** (GLO) — song arranger.  
+**USER / PRESETS / PHRASES / PROJECT / TOOLS** (SAVE) — preset browser, phrase loader, project slots, and utility tools.  
+**ARP / ARP 2** — arpeggiator mode, rate, octave, gate, swing, probability, hold, and order.
+
+---
+
+## Build
+
+```
+git clone --recursive https://github.com/DP3OYB/DP3OYB
+cd DP3OYB
+python3 tools/build.py
+```
+
+Output: `build/felucca.fwsc`. See [BUILDING.md](BUILDING.md) for dependencies and platform notes.
+
+The browser emulator builds with Emscripten:
+
+```
+sh platforms/web/build.sh
+```
+
+Output goes to `build/web/` and `docs/try/`.
+
+## Platforms
+
+| Platform | Status |
+| --- | --- |
+| M-VAVE FM-1 | Supported |
+| Browser (emulator) | Supported — [try it](https://DP3OYB.github.io/DP3OYB/try/) |
+| Desktop (SDL2) | Beta |
+| libretro (RetroArch) | Beta |
 
 ## Credits and licence
 
-Free software: [GPL-3.0-only](LICENSE); the Hügelton Sample Pack is CC0 1.0; the engines in `firmware/engines` are MIT
-([Felucca-Engines](https://github.com/hugelton/Felucca-Engines)); the hardware layer in `firmware/bsp` is MPL-2.0
-([felucca-bsp](https://github.com/hugelton/felucca-bsp)); the bundled fonts and ported DSP keep their own licences
-([LICENSES/](LICENSES/), [LICENSING.md](LICENSING.md)). Thanks to everyone whose work and contributions are in it: [CREDITS.md](CREDITS.md).
+Forked from [Felucca](https://github.com/hugelton/Felucca) by Leo Kuroshita / Hügelton Instruments.
 
-M-VAVE and FM-1 are trademarks of their respective owners. Felucca is not affiliated with or endorsed by them.
+Free software: [GPL-3.0-only](LICENSE). The bundled fonts and ported DSP keep their own licences ([LICENSES/](LICENSES/), [LICENSING.md](LICENSING.md)).
 
-Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
+M-VAVE and FM-1 are trademarks of their respective owners. DP3OYB is not affiliated with or endorsed by them.
