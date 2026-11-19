@@ -201,8 +201,8 @@ static uint32_t voice_victim(const track_t *self, int soft, track_t **pp)
                 c = 1;                                  /* released */
             else if (mode != V_POLY && i > 0)
                 c = 2;                                  /* extra UNISON, or a voice left by a mode / cap change */
-            else if (!soft && mode == V_POLY && i != low)
-                c = 3;                                  /* held, not the bass */
+            else if (!soft && mode == V_POLY && i != low && t == self)
+                c = 3;                                  /* held, not the bass — own track only; never steal across tracks */
             else
                 continue;
             if (c < cat || (c == cat && v->age < (*pp)->v[best].age)) {
