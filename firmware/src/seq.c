@@ -50,7 +50,7 @@ static volatile uint8_t kb_asleep;       /* MENU > SCREEN OFF (ui.c): the screen
 static uint8_t last_note = 60;
 static uint8_t kb_hold[NTRK];           /* double-tap OCT+: note hold per track — key-off deferred until hold is turned off */
 static uint32_t kb_hold_on(uint32_t c) { return c < NTRK ? kb_hold[c] : 0u; }
-static uint32_t kb_held_mask;           /* keys whose note-off is deferred by hold mode (bit per key) */
+static uint32_t kb_held_mask[NTRK];     /* per-track: keys whose note-off is deferred by hold mode (bit per key) */
 static volatile uint8_t transport_req;   /* 1 start, 2 stop, 3 restart (from the UI) */
 static volatile uint8_t panic_req;       /* bit per track: release every sounding note (preset / engine change) */
 static volatile uint8_t clock_lost;      /* 1.8: an external clock (G_CLOCK 1 USB, 2 TRS) stopped coming: the play
@@ -799,9 +799,9 @@ static void kb_hold_toggle(void)
     kb_hold[sel] ^= 1u;
     if (!kb_hold[sel]) {
         for (k = 0; k < 27u; k++)
-            if ((kb_held_mask >> k) & 1u && kb_trk[k] % NTRK == sel) {
+            if ((kb_held_mask[sel] >> k) & 1u) {
                 key_off(k, &trk[sel]);
-                kb_held_mask &= ~(1u << k);
+                kb_held_mask[sel] &= ~(1u << k);
             }
     }
 }
@@ -847,10 +847,11 @@ static void keyboard_block(void)
         if (!((ch >> k) & 1u))
             continue;
         if ((cur >> k) & 1u) {                    /* the selected track; the key-up goes to the same one */
-            if ((kb_held_mask >> k) & 1u)         /* re-press while held: release the deferred note first */
-                key_off(k, &trk[kb_trk[k] % NTRK]);
+            { uint32_t nsel = song.sel % NTRK;    /* re-press: refresh hold only if same track held it */
+              if ((kb_held_mask[nsel] >> k) & 1u)
+                  key_off(k, &trk[nsel]);
+              kb_held_mask[nsel] &= ~(1u << k); }
             kb_trk[k] = song.sel;
-            kb_held_mask &= ~(1u << k);
             if (kb_asleep) {                      /* (SCREEN OFF: the wake press is swallowed) */
                 kb_note[k] = KB_SILENT;
                 continue;
@@ -883,7 +884,7 @@ static void keyboard_block(void)
             if (kb_note[k] == KB_SILENT)
                 continue;
             if (kb_hold[kb_trk[k] % NTRK]) {      /* hold mode: defer note-off until hold is toggled off */
-                kb_held_mask |= 1u << k;
+                kb_held_mask[kb_trk[k] % NTRK] |= 1u << k;
                 continue;
             }
             key_off(k, &trk[kb_trk[k] % NTRK]);
