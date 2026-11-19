@@ -51,9 +51,6 @@ static uint8_t last_note = 60;
 static uint8_t kb_hold[NTRK];           /* double-tap OCT+: note hold per track — key-off deferred until hold is turned off */
 static uint32_t kb_hold_on(uint32_t c) { return c < NTRK ? kb_hold[c] : 0u; }
 static uint32_t kb_held_mask;           /* keys whose note-off is deferred by hold mode (bit per key) */
-static uint8_t  kb_held_trk[27];        /* track that last deferred each key's note-off */
-static uint8_t  kb_held_chn[27];        /* kb_chn[k]      at hold-defer time (chord count) */
-static uint8_t  kb_held_root[27];       /* kb_chord[k][0] at hold-defer time (root pitch) */
 static volatile uint8_t transport_req;   /* 1 start, 2 stop, 3 restart (from the UI) */
 static volatile uint8_t panic_req;       /* bit per track: release every sounding note (preset / engine change) */
 static volatile uint8_t clock_lost;      /* 1.8: an external clock (G_CLOCK 1 USB, 2 TRS) stopped coming: the play
@@ -802,15 +799,8 @@ static void kb_hold_toggle(void)
     kb_hold[sel] ^= 1u;
     if (!kb_hold[sel]) {
         for (k = 0; k < 27u; k++)
-            if ((kb_held_mask >> k) & 1u && kb_held_trk[k] % NTRK == sel) {
-                /* restore hold-time chord data before key_off; kb_chn/kb_chord may have
-                 * been overwritten if the same key was later pressed on another track */
-                uint8_t save_chn = kb_chn[k], save_root = kb_chord[k][0];
-                kb_chn[k] = kb_held_chn[k];
-                kb_chord[k][0] = kb_held_root[k];
+            if ((kb_held_mask >> k) & 1u && kb_trk[k] % NTRK == sel) {
                 key_off(k, &trk[sel]);
-                kb_chn[k] = save_chn;
-                kb_chord[k][0] = save_root;
                 kb_held_mask &= ~(1u << k);
             }
     }
@@ -857,13 +847,10 @@ static void keyboard_block(void)
         if (!((ch >> k) & 1u))
             continue;
         if ((cur >> k) & 1u) {                    /* the selected track; the key-up goes to the same one */
-            if ((kb_held_mask >> k) & 1u) {
-                if (kb_trk[k] % NTRK == song.sel % NTRK) { /* same track: refresh hold */
-                    key_off(k, &trk[kb_trk[k] % NTRK]);
-                    kb_held_mask &= ~(1u << k);
-                } /* different track: leave held note sounding; mask stays for hold-toggle */
-            }
+            if ((kb_held_mask >> k) & 1u)         /* re-press while held: release the deferred note first */
+                key_off(k, &trk[kb_trk[k] % NTRK]);
             kb_trk[k] = song.sel;
+            kb_held_mask &= ~(1u << k);
             if (kb_asleep) {                      /* (SCREEN OFF: the wake press is swallowed) */
                 kb_note[k] = KB_SILENT;
                 continue;
@@ -896,11 +883,6 @@ static void keyboard_block(void)
             if (kb_note[k] == KB_SILENT)
                 continue;
             if (kb_hold[kb_trk[k] % NTRK]) {      /* hold mode: defer note-off until hold is toggled off */
-                if (!(kb_held_mask & (1u << k))) { /* first defer: snapshot chord data for hold-toggle */
-                    kb_held_trk[k]  = kb_trk[k];
-                    kb_held_chn[k]  = kb_chn[k];
-                    kb_held_root[k] = kb_chn[k] ? kb_chord[k][0] : 0u;
-                }
                 kb_held_mask |= 1u << k;
                 continue;
             }
