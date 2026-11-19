@@ -1949,11 +1949,8 @@ static void home_track_row(uint32_t c)
     t->peak = 0;
     if (m < ts.meter[c] - 1)
         m = ts.meter[c] - 1;
-    {
-        int32_t soff_r = (int32_t)t->p[P_SOFF] % (int32_t)len;
-        sig = str_hash(1u + sel + mute * 2u + large * 4u + t->eng_req * 8u, b) + steps_hash(t) * 31u + pg * 7919u +
-              ph * 104729u + len * 1299709u + lit * 15485863u + arm * 97u + (uint32_t)(soff_r + 32) * 48271u;
-    }
+    sig = str_hash(1u + sel + mute * 2u + large * 4u + t->eng_req * 8u, b) + steps_hash(t) * 31u + pg * 7919u +
+          ph * 104729u + len * 1299709u + lit * 15485863u + arm * 97u;
     if (!ui.force && sig == ts.col[c]) {
         if (m != ts.meter[c]) {
             ts.meter[c] = (uint8_t)m;
@@ -1978,11 +1975,6 @@ static void home_track_row(uint32_t c)
     x = 19;                                          /* no engine icon; text at same x as MIXER */
     cv_free_text(x, TR_NY(large) - (large ? AF_M_CAP_Y : AF_S_CAP_Y), large ? &AF_M : &AF_S, b,
                  mute ? T_DIM : sel ? T_ACCENT : T_TEXT, bg, xr - x);
-    uint32_t sstart;
-    {
-        int32_t soff_r = (int32_t)t->p[P_SOFF] % (int32_t)len;
-        sstart = (uint32_t)((soff_r + (int32_t)len) % (int32_t)len);
-    }
     for (i = p0; i-- > 0u;)                          /* a TIE at the page's start: carried from a note before it? */
         if (s[i].time != ST_TIE) {
             carry = s[i].time == ST_NOTE && s[i].n;
@@ -1992,7 +1984,6 @@ static void home_track_row(uint32_t c)
         const step_t *st = &s[p0 + i];
         int32_t bx = tr_bx(i);
         uint16_t under = i == ph ? cp : bg;
-        int32_t is_start = !mute && (p0 + i == sstart); /* ROTA: first step played on transport start */
         if (i == ph)                                 /* the step playing: a raised cell */
             cv_rrect(bx - 1, TR_SB - 9, TR_BW + 2, 9, 2, cp, bg);
         if (st->time == ST_TIE && carry) {           /* carried on: joined to the bar before */
@@ -2003,17 +1994,17 @@ static void home_track_row(uint32_t c)
             int acc = (st->flags & SF_ACCENT) != 0u;
             int is_long = p0 + i + 1 < len && s[p0 + i + 1].time == ST_TIE;
             cv_rrect(bx, TR_SB - (acc ? 8 : 5), TR_BW, acc ? 8 : 5, 2,
-                     i == ph ? cpl : is_start ? T_REC : is_long ? cl : acc ? ca : cn, under);
+                     i == ph ? cpl : is_long ? cl : acc ? ca : cn, under);
             carry = 1;
             continue;
         } else if (st->time == ST_NOTE && st->hit) { /* DRUM hits: a pad, two for two hits or more */
-            uint16_t pc = i == ph ? cpl : is_start ? T_REC : (st->acc & st->hit) ? ca : cn;
+            uint16_t pc = i == ph ? cpl : (st->acc & st->hit) ? ca : cn;
             cv_rrect(bx, TR_SB - 4, TR_BW, 4, 1, pc, under);
             if (st->hit & (st->hit - 1u))
                 cv_rrect(bx, TR_SB - 9, TR_BW, 4, 1, pc, under);
         } else {                                     /* empty, a REST, a TIE carrying nothing */
             cv_rect(bx, TR_SB - 2, TR_BW, 2,
-                    i == ph ? T_MID : st->time == ST_TIE ? T_MID : is_start ? T_REC : cs);
+                    i == ph ? T_MID : st->time == ST_TIE ? T_MID : cs);
         }
         carry = st->time == ST_TIE && carry;
     }

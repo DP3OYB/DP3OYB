@@ -542,10 +542,14 @@ static void tracks_edit(uint32_t slot, int32_t steps)
         d = &TP[P_LEVEL];
         break;
     case 2:
-        if (cur_page()->graph == GR_HOME_TRK) {         /* TRACKS: OFFS (loop phase offset) */
-            vp = &t->p[P_SOFF];
-            d = &TP[P_SOFF];
-            break;
+        if (cur_page()->graph == GR_HOME_TRK) {         /* TRACKS: ROTA — rotate step data live */
+            int32_t delta = accel(EN_K1 + slot, steps, TP[P_SOFF].max - TP[P_SOFF].min);
+            if (delta) {
+                uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP);
+                seq_rota_apply(t, len, delta);
+                t->p[P_SOFF] = (int16_t)(((int32_t)t->p[P_SOFF] + delta) % (int32_t)len);
+            }
+            return;
         }
         {   /* MIXER: FX%: adjust non-destructive multiplier (trk_fx_pct), does not modify FX page params */
             int32_t delta = accel(EN_K1 + slot, steps, 127);

@@ -131,11 +131,7 @@ static __attribute__((noinline)) void chain_apply(void)
             t->p[P_SQNT] = 1;
             t->p[P_SOFF] = 0;
         }
-        {
-            uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP);
-            int32_t off = (int32_t)t->p[P_SOFF] % (int32_t)len;
-            t->seq_idx = (uint16_t)(((int32_t)len - 1 + off + (int32_t)len) % (int32_t)len);
-        }
+        t->seq_idx = (uint16_t)((uint32_t)clamp(t->p[P_SLEN], 1, NSTEP) - 1u);
         t->seq_pos = 0x7FFFFFFFu;
         t->rh_n = t->rskip_n = 0;
     }
