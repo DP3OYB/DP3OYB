@@ -1778,7 +1778,7 @@ static void ui_input(void)
                 break;
             }
             /* double-tap: second press within 400 ms toggles envelope retrigger */
-            if (oct_dn_t && now - oct_dn_t < 400u * 1000u * FM1_TICKS_PER_US) {
+            if (oct_dn_t && now - oct_dn_t < 250u * 1000u * FM1_TICKS_PER_US) {
                 oct_dn_t = 0;
                 if (song.octave > -3)                  /* undo the first tap's octave shift */
                     song.octave++;
@@ -1802,7 +1802,7 @@ static void ui_input(void)
                 break;
             }
             /* double-tap: second press within 400 ms toggles note hold */
-            if (oct_up_t && now - oct_up_t < 400u * 1000u * FM1_TICKS_PER_US) {
+            if (oct_up_t && now - oct_up_t < 250u * 1000u * FM1_TICKS_PER_US) {
                 oct_up_t = 0;
                 if (song.octave < 3)                   /* undo the first tap's octave shift */
                     song.octave--;

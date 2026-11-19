@@ -2,7 +2,7 @@
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
-A 6-track performance groovebox enhanced from [Felucca](https://github.com/hugelton/Felucca). Adds 2 LFOs with sequencer trigs, retriggering envelopes, mixer and track sequencing views with quick-access controls, note hold, LED-assisted chord-mode, and a redesigned UI optimized for live use. Current version: **1.0.5**
+A 6-track performance groovebox enhanced from [Felucca](https://github.com/hugelton/Felucca). Adds 2 LFOs with sequencer trigs, retriggering envelopes, mixer and track sequencing views with quick-access controls, note hold, LED-assisted chord-mode, and a redesigned UI optimized for live use. Current version: **1.0.6**
 
 [Try it in your browser](https://DP3OYB.github.io/DP3OYB/try/) — no FM-1 needed.
 
@@ -63,6 +63,8 @@ Tap to go to that family's first page; tap again to step through its pages. The 
 | **OCT−** | Octave down; in dialogs and menus: back / cancel |
 | **OCT+** | Octave up; in dialogs and menus: confirm |
 | **OCT− + OCT+** | Octave reset |
+| **OCT+** double-tap | Toggle NOTE HOLD on the selected track |
+| **OCT−** double-tap | Toggle ENV RETRIG on the selected track |
 | OCT+ breathes | NOTE HOLD is active on the selected track |
 | OCT− breathes | ENV RETRIG is active on the selected track |
 
