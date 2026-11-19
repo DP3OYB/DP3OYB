@@ -70,6 +70,8 @@ Tap to go to that family's first page; tap again to step through its pages. The 
 
 Hold a button to open its layer, then use the keys and knobs. Release to close (changes revert); press **OCT+** before releasing to keep them. **OCT−** while a layer is open undoes / puts values back.
 
+**To lock a layer open** (no button held): hold **OCT+** and tap one of FX · SCL · EDIT · GLO · SEQ · REC. The layer stays open; tap its button again to close. The OCT+ octave shift is cancelled when used this way.
+
 | Hold | Keys do | Knobs do |
 | --- | --- | --- |
 | **FX** | Performance effects; black keys mute tracks | FILTER · CRUSH · THROW · DEPTH (macros) |
