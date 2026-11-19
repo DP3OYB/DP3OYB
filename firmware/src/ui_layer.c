@@ -282,18 +282,20 @@ static uint32_t layer_gesture(uint32_t now, uint32_t combo)
     if (ly_down(l)) {
         if (!(*t0 & (LY_OPEN | LY_DEAD)) &&
             (combo || now - (*t0 & ~15u) >= (uint32_t)HOLD_MS[settings_hold % 4u] * 1000u * FM1_TICKS_PER_US)) {
-            *t0 |= LY_OPEN | (combo ? LY_COMBO : 0u);
-            layer_opened(l);
+            if (lys.dtap && !combo) {                   /* #83: tap then hold → locked open */
+                lys.dtap = 0;
+                layer_lock(l, now);
+                ui.home_locked = 1;
+            } else {
+                *t0 |= LY_OPEN | (combo ? LY_COMBO : 0u);
+                layer_opened(l);
+            }
         }
         return 0;
     }
     l = *t0 & (LY_OPEN | LY_DEAD) || combo ? 0u : l;   /* (a knob turned as it was let go: a combo, no tap) */
-    if (l && lys.dtap) {                                /* #83: a double tap: locked open (no tap) */
+    if (l && lys.dtap)                                  /* #83: second press released quickly: clear dtap, normal tap */
         lys.dtap = 0;
-        layer_lock(l, now);
-        ui.home_locked = 1;                            /* suppress home_tap: HOME closes the layer, page already restored */
-        return 0;
-    }
     layer_let_go(*t0 & LY_OPEN || combo);
     return l;
 }
@@ -1361,6 +1363,8 @@ static void draw_layer(void)
         int h = help_on() && help_row(l == LAYER_SEQ && eu.on ? H_EUCLID : HELP_LAYER[l], 21);   /* 1.5, HELP ON: a
                                                          * second row, what this one does not say */
         cv_key_row(8, 232, h ? 2 : 9, ft, ft[2].act ? 3u : 2u, 7u, T_BG);
+        if (l != LAYER_REC)
+            cv_bmpk(215, 27, BMP_TAP, 11, T_TEXT);
         cv_blit(0, Y_FOOT);
         ui.foot_sig = 0;
     }

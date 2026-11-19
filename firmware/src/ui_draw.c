@@ -833,6 +833,50 @@ static void sound_name(const track_t *t, char *b)
         str_cpy(b, e->presets[t->preset % e->npresets].name, 16);
 }
 
+static const char * const BMP_TAPHOLD[20] = {
+    "KKKKKKKKKKKKKKKKKKKKKKKKKKK",
+    "K.........................K",
+    "K.KKKKKKK...KK...KKKKKK...K",
+    "K....K.....K..K..K....K...K",
+    "K....K....K....K.K....K...K",
+    "K....K....KKKKKK.KKKKKK...K",
+    "K....K....K....K.K........K",
+    "K....K....K....K.K........K",
+    "K....K....K....K.K........K",
+    "K.........................K",
+    "K.K...K..KKK..K.....KKK...K",
+    "K.K...K.K...K.K.....K..K..K",
+    "K.K...K.K...K.K.....K...K.K",
+    "K.KKKKK.K...K.K.....K...K.K",
+    "K.K...K.K...K.K.....K...K.K",
+    "K.K...K.K...K.K.....K...K.K",
+    "K.K...K.K...K.K.....K..K..K",
+    "K.K...K..KKK..KKKKK.KKK...K",
+    "K.........................K",
+    "KKKKKKKKKKKKKKKKKKKKKKKKKKK",
+};
+static const char * const BMP_TAP[11] = {
+    "KKKKKKKKKKKKKKKKKKKKKKKKK",
+    "K.......................K",
+    "K.KKKKKKK...KK...KKKKKK.K",
+    "K....K.....K..K..K....K.K",
+    "K....K....K....K.K....K.K",
+    "K....K....KKKKKK.KKKKKK.K",
+    "K....K....K....K.K......K",
+    "K....K....K....K.K......K",
+    "K....K....K....K.K......K",
+    "K.......................K",
+    "KKKKKKKKKKKKKKKKKKKKKKKKK",
+};
+static void cv_bmpk(int32_t x0, int32_t y0, const char * const *rows, int32_t n, uint16_t c)
+{
+    int32_t y, x;
+    for (y = 0; y < n; y++)
+        for (x = 0; rows[y][x]; x++)
+            if (rows[y][x] == 'K')
+                cv_pset(x0 + x, y0 + y, c);
+}
+
 static void draw_foot(void)
 {
     char s[48], pn[16], ti[20], ln[24];
@@ -842,6 +886,9 @@ static void draw_foot(void)
     const engine_t *e = ENGINES[TSEL->eng_req % NENGINES];
     const char *ename = e->name, *help;
     int32_t x;
+    uint32_t show_hint = ui.home || pg->fam == FAM_FX || pg->fam == FAM_SCL ||
+                         pg->fam == FAM_EDIT || pg->fam == FAM_GLO || pg->fam == FAM_SEQ ||
+                         pg->fam == FAM_TRK;
     sound_name(t, pn);
     if (ui.home) {                                     /* TWIDDLE: last in the FAM_TRK sequence */
         uint32_t i, n = 1;                             /* +1 for TWIDDLE itself */
@@ -941,7 +988,7 @@ static void draw_foot(void)
     {   /* row 2: engine icon + name, sound, page title at the right with its icon before it (MIXER, PHRASES, SONG,
          * AUTOMATION); icons: their ink on the names' capitals */
         uint32_t pi = ui.home ? ICON_NONE : page_icon(pg), ei = FELUCCA_ICONS ? engine_icon(ename) : ICON_NONE;
-        int32_t r = 232, tx, ex, need = text_w(&AF_S, pn), ew = text_w(&AF_S, ename);
+        int32_t r = show_hint ? 202 : 232, tx, ex, need = text_w(&AF_S, pn), ew = text_w(&AF_S, ename);
         ex = 8 + (FELUCCA_ICONS ? 12 + 5 : 0) + (ew < 80 ? ew : 80);   /* (where the engine's name ends) */
         tx = r - text_w(&AF_S, ti) - (pi != ICON_NONE ? 16 : 0);
         if (!ui.home && pg->graph == GR_EVENTS && tx - 12 - (ex + 10) < need) {
@@ -964,6 +1011,8 @@ static void draw_foot(void)
         }
         cv_text_r(r, 19, &AF_S, ti, T_MID, T_BG);
     }
+    if (show_hint)
+        cv_bmpk(213, 18, BMP_TAPHOLD, 20, T_TEXT);
     cv_blit(0, Y_FOOT);
 }
 /* the EDIT layer's cards (ui_layer.c): ENG (the engine), No. (its sounds: KNOB 2's list), FAV, an empty card */
@@ -1377,7 +1426,7 @@ static void draw_columns(void)
  * Logo: 193 x 35 px, 2 bits a pixel (high bits first): 0 clear, 1 white, 2 red, 3 blue; source is the ASCII art
  * supplied at build time (. W R B). */
 #ifndef FM1_BUILD_VERSION
-#define FM1_BUILD_VERSION "1.0.6"
+#define FM1_BUILD_VERSION "1.0.7"
 #endif
 #define FM1_LOGO_W 193
 #define FM1_LOGO_H 35

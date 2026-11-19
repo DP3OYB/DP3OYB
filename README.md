@@ -2,7 +2,7 @@
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
-A 6-track performance groovebox enhanced from [Felucca](https://github.com/hugelton/Felucca). Adds 2 LFOs with sequencer trigs, retriggering envelopes, mixer and track sequencing views with quick-access controls, note hold, LED-assisted chord-mode, and a redesigned UI optimized for live use. Current version: **1.0.6**
+A 6-track performance groovebox enhanced from [Felucca](https://github.com/hugelton/Felucca). Adds 2 LFOs with sequencer trigs, retriggering envelopes, mixer and track sequencing views with quick-access controls, note hold, LED-assisted chord-mode, and a redesigned UI optimized for live use. Current version: **1.0.7**
 
 [Try it in your browser](https://DP3OYB.github.io/DP3OYB/try/) — no FM-1 needed.
 
@@ -70,7 +70,9 @@ Tap to go to that family's first page; tap again to step through its pages. The 
 
 ### Hold layers
 
-Hold a button to open its layer, then use the keys and knobs. Release to close (changes revert); press **OCT+** before releasing to keep them. **OCT−** while a layer is open undoes / puts values back.
+Tap a layer button (**FX**, **SCL**, **EDIT**, **GLO**, **SEQ**) to navigate its pages. A **TAP / HOLD** badge in the footer corner marks buttons that have this secondary function.
+
+Hold the button to open its layer overlay. Release to close (changes revert). To **lock** the layer open: tap once, then press and hold the same button a second time — the layer stays open after you release. Press the button again to unlock. Press **OCT+** while a layer is open to keep any changes; **OCT−** undoes / puts values back.
 
 | Hold | Keys do | Knobs do |
 | --- | --- | --- |
