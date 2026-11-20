@@ -915,6 +915,29 @@ static __attribute__((noinline)) void kt_block(void)
         }
 }
 
+/* ROTA knob: rotate step data in place by delta steps (positive = later / SHIFT>), update motion and seq_idx */
+static void seq_rota_apply(track_t *t, uint32_t len, int32_t delta)
+{
+    step_t buf[NSTEP];
+    uint8_t to[NSTEP];
+    uint32_t j, k = trk_index(t), f;
+    uint32_t d = (uint32_t)(((delta % (int32_t)len) + (int32_t)len) % (int32_t)len);
+    if (!d) return;
+    memcpy(buf, t->step, sizeof buf);
+    for (j = 0; j < len; j++) {
+        uint32_t src = (j + len - d) % len;
+        t->step[j] = buf[src];
+        to[src] = (uint8_t)j;
+    }
+    f = motion_guard();
+    for (j = 0; j < motion.count; j++) {
+        motion_event_t *e = &motion.event[j];
+        if ((e->place >> 6) == k && (e->place & 63u) < len)
+            e->place = (uint16_t)(k << 6 | to[e->place & 63u]);
+    }
+    motion_unguard(f);
+}
+
 /* -------------------------------------------------------- sequencer --- */
 static void seq_start(void)
 {
@@ -924,12 +947,8 @@ static void seq_start(void)
     chain_start();
     for (i = 0; i < NTRK; i++) {                   /* every track from its step 0, together */
         track_t *t = &trk[i];
-        {
-            uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP);
-            int32_t off = (int32_t)t->p[P_SOFF] % (int32_t)len;
-            t->seq_idx = (uint16_t)(((int32_t)len - 1 + off + (int32_t)len) % (int32_t)len);
-        }
-        t->seq_pos = 0x7FFFFFFF;                   /* step (SOFF) fires on the first block */
+        t->seq_idx = (uint16_t)((uint32_t)clamp(t->p[P_SLEN], 1, NSTEP) - 1u);
+        t->seq_pos = 0x7FFFFFFF;                   /* step fires on the first block */
         t->rskip_n = 0;
         t->rh_n = 0;
         t->rat_left = 0;

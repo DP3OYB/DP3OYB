@@ -2,6 +2,7 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Felucca UI input: LEDs, knobs and buttons, SEQ step entry, panel setup. */
 #include "ui_name.c"                                    /* NAME: naming user presets and projects */
+static uint8_t oct_inc;    /* OCT+ pressed and actually incremented octave; cleared when consumed as a layer modifier */
 /* ----------------------------------------------------------- LEDs --- */
 /* The LED picture is built off-line and copied one byte per column: clearing
  * and relighting would let the 10 kHz scan catch the dark gap and flicker. */
@@ -541,10 +542,14 @@ static void tracks_edit(uint32_t slot, int32_t steps)
         d = &TP[P_LEVEL];
         break;
     case 2:
-        if (cur_page()->graph == GR_HOME_TRK) {         /* TRACKS: OFFS (loop phase offset) */
-            vp = &t->p[P_SOFF];
-            d = &TP[P_SOFF];
-            break;
+        if (cur_page()->graph == GR_HOME_TRK) {         /* TRACKS: ROTA — rotate step data live */
+            int32_t delta = accel(EN_K1 + slot, steps, TP[P_SOFF].max - TP[P_SOFF].min);
+            if (delta) {
+                uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP);
+                seq_rota_apply(t, len, delta);
+                t->p[P_SOFF] = (int16_t)(((int32_t)t->p[P_SOFF] + delta) % (int32_t)len);
+            }
+            return;
         }
         {   /* MIXER: FX%: adjust non-destructive multiplier (trk_fx_pct), does not modify FX page params */
             int32_t delta = accel(EN_K1 + slot, steps, 127);
@@ -1794,6 +1799,7 @@ static void ui_input(void)
         case B_OCTUP: {
             static uint32_t oct_up_t;
             uint32_t both = (1u << panel.btn[B_OCTDN]) | (1u << panel.btn[B_OCTUP]);
+            oct_inc = 0;
             if (act_cols() || layer_set_open() || ui.ml.on)
                 break;
             if ((fm1_in.buttons & both) == both) {
@@ -1811,8 +1817,10 @@ static void ui_input(void)
                 break;
             }
             oct_up_t = now;
-            if (song.octave < 3)
+            if (song.octave < 3) {
                 song.octave++;
+                oct_inc = 1;
+            }
             break;
         }
         default:                                        /* page buttons (GLO SCL ENV LFO EDIT ARP): when let go */

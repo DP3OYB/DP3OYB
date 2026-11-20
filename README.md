@@ -2,7 +2,7 @@
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
-A 6-track performance groovebox enhanced from [Felucca](https://github.com/hugelton/Felucca). Adds 2 LFOs with sequencer trigs, retriggering envelopes, mixer and track sequencing views with quick-access controls, note hold, LED-assisted chord-mode, and a redesigned UI optimized for live use. Current version: **1.0.7**
+A 6-track performance groovebox enhanced from [Felucca](https://github.com/hugelton/Felucca). Adds 2 LFOs with sequencer trigs, retriggering envelopes, mixer and track sequencing views with quick-access controls, note hold, LED-assisted chord-mode, and a redesigned UI optimized for live use. Current version: **1.0.8**
 
 [Try it in your browser](https://DP3OYB.github.io/DP3OYB/try/) — no FM-1 needed.
 
@@ -184,6 +184,14 @@ The graph shows a full two-octave keyboard (F to G: 16 white keys, 11 black keys
 Engine-specific parameters on EDIT 1 / EDIT 2 (eight knobs total). Additional pages appear for engines that need them: OPERATOR / OP ENV for FM6; SLICES for SLICE; LANES for DRUM; FILTER for ANALOG.
 
 **VOICE** / **VOICE 2** / **VOICE 3** control polyphony, glide, pan, spread, and aftertouch.
+
+---
+
+### HOME — MIXER · TRACKS
+
+**MIXER** shows per-track level, pan, and FX%. **TRACKS** shows each track's step grid.
+
+On the TRACKS page, **K3 (ROTA)** rotates the step pattern in real time — turning it shifts the sequence's start point immediately, both audibly and visually. This is non-destructive relative to the other controls: the rotation is applied to the step data, so it persists and shows on all pages that display the sequence.
 
 ---
 
