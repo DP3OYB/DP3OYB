@@ -1377,7 +1377,7 @@ static void draw_columns(void)
  * Logo: 193 x 35 px, 2 bits a pixel (high bits first): 0 clear, 1 white, 2 red, 3 blue; source is the ASCII art
  * supplied at build time (. W R B). */
 #ifndef FM1_BUILD_VERSION
-#define FM1_BUILD_VERSION "1.0.5"
+#define FM1_BUILD_VERSION "1.0.8"
 #endif
 #define FM1_LOGO_W 193
 #define FM1_LOGO_H 35

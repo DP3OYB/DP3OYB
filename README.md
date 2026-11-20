@@ -2,7 +2,7 @@
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
-A 6-track performance groovebox enhanced from [Felucca](https://github.com/hugelton/Felucca). Adds 2 LFOs with sequencer trigs, retriggering envelopes, mixer and track sequencing views with quick-access controls, note hold, LED-assisted chord-mode, and a redesigned UI optimized for live use. Current version: **1.0.5**
+A 6-track performance groovebox enhanced from [Felucca](https://github.com/hugelton/Felucca). Adds 2 LFOs with sequencer trigs, retriggering envelopes, mixer and track sequencing views with quick-access controls, note hold, LED-assisted chord-mode, and a redesigned UI optimized for live use. Current version: **1.0.8**
 
 [Try it in your browser](https://DP3OYB.github.io/DP3OYB/try/) — no FM-1 needed.
 
@@ -68,9 +68,9 @@ Tap to go to that family's first page; tap again to step through its pages. The 
 
 ### Hold layers
 
-Hold a button to open its layer, then use the keys and knobs. Release to close (changes revert); press **OCT+** before releasing to keep them. **OCT−** while a layer is open undoes / puts values back.
+Tap a layer button (**FX**, **SCL**, **EDIT**, **GLO**, **SEQ**) to navigate its pages. A **TAP / HOLD** badge in the footer corner marks buttons that have this secondary function.
 
-**To lock a layer open** (no button held): hold **OCT+** and tap one of FX · SCL · EDIT · GLO · SEQ · REC. The layer stays open; tap its button again to close. The OCT+ octave shift is cancelled when used this way.
+Hold the button to open its layer overlay. Release to close (changes revert). To **lock** the layer open: tap once, then press and hold the same button a second time — the layer stays open after you release. Press the button again to unlock. Press **OCT+** while a layer is open to keep any changes; **OCT−** undoes / puts values back.
 
 | Hold | Keys do | Knobs do |
 | --- | --- | --- |
@@ -182,6 +182,14 @@ The graph shows a full two-octave keyboard (F to G: 16 white keys, 11 black keys
 Engine-specific parameters on EDIT 1 / EDIT 2 (eight knobs total). Additional pages appear for engines that need them: OPERATOR / OP ENV for FM6; SLICES for SLICE; LANES for DRUM; FILTER for ANALOG.
 
 **VOICE** / **VOICE 2** / **VOICE 3** control polyphony, glide, pan, spread, and aftertouch.
+
+---
+
+### HOME — MIXER · TRACKS
+
+**MIXER** shows per-track level, pan, and FX%. **TRACKS** shows each track's step grid.
+
+On the TRACKS page, **K3 (ROTA)** rotates the step pattern in real time — turning it shifts the sequence's start point immediately, both audibly and visually. This is non-destructive relative to the other controls: the rotation is applied to the step data, so it persists and shows on all pages that display the sequence.
 
 ---
 
