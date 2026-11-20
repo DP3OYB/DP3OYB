@@ -936,8 +936,6 @@ static void seq_rota_apply(track_t *t, uint32_t len, int32_t delta)
             e->place = (uint16_t)(k << 6 | to[e->place & 63u]);
     }
     motion_unguard(f);
-    if (song.playing)
-        t->seq_idx = (uint16_t)((t->seq_idx + d) % len);
 }
 
 /* -------------------------------------------------------- sequencer --- */
