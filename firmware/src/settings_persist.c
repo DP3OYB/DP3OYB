@@ -25,17 +25,22 @@ typedef struct {
     panel_t panel;
     uint32_t bold;
     struct { uint8_t factory[16][32]; uint32_t user, filter; } favorites;
+    uint8_t last_slot;              /* 1-indexed last saved/loaded project slot (1..CHAIN_SILENT), 0 = none */
+    uint8_t _pad_lsp[3];
 } persist_t;
-#define PERSIST_MAGIC 0x50455234u
+#define PERSIST_MAGIC 0x50455235u   /* "PER5": added last_slot */
+#define PERSIST_MAGIC_V4 0x50455234u
 
 /* Normalize in place; 1 = current, 2 = migrated, 0 = invalid. */
 static int settings_import(persist_t *p, int n)
 {
     int current = n == (int)sizeof *p && p->magic == PERSIST_MAGIC;
-    int old3 = n == (int)(sizeof *p - sizeof p->favorites) && p->magic == 0x50455233u;
-    int old2 = n == (int)(sizeof *p - sizeof p->favorites - sizeof p->bold) && p->magic == 0x50455232u;
+    int old4 = n == (int)(sizeof *p - 4u) && p->magic == PERSIST_MAGIC_V4;
+    int old3 = n == (int)(sizeof *p - 4u - sizeof p->favorites) && p->magic == 0x50455233u;
+    int old2 = n == (int)(sizeof *p - 4u - sizeof p->favorites - sizeof p->bold) && p->magic == 0x50455232u;
     int old1 = n == (int)(8u + sizeof(panel_t)) && p->magic == 0x50455231u;
-    if (!(current || old3 || old2 || old1)) return 0;
+    if (!(current || old4 || old3 || old2 || old1)) return 0;
+    if (old4 || old3 || old2 || old1) p->last_slot = 0;
     if (old1) {
         panel_t old;
         memcpy(&old, (uint8_t *)p + 8, sizeof old);
@@ -95,6 +100,7 @@ static int settings_import(persist_t *p, int n)
 #endif
 #endif
     if (p->panel.magic == PANEL_MAGIC) panel = p->panel;
+    proj_last_slot = p->last_slot;
     return current ? 1 : 2;
 }
 
@@ -111,4 +117,5 @@ static void settings_export(persist_t *p)
 #ifdef FELUCCA_FAVORITES
     memcpy(&p->favorites, &favorites, sizeof favorites);
 #endif
+    p->last_slot = proj_last_slot;
 }

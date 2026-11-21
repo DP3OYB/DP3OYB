@@ -1,5 +1,53 @@
 # Custom firmware changes
 
+---
+
+## v1.0.9
+
+### Step record mode
+
+**Files:** `firmware/src/ui_input.c`, `firmware/src/core.h`
+
+Adds a step record mode for entering notes and rests one step at a time without the
+sequencer running. Double-tap **REC** to enter step record; the REC LED breathes while
+active. Each key press on the keyboard writes a note to the cursor step and advances
+to the next. The mode auto-terminates when the cursor wraps past the last step.
+
+- `song.step_mode` — uint8_t flag toggled by double-tap REC; persisted in song state
+- In step record, **OCT−** immediately writes a TIE event at the cursor and advances
+- In step record, **OCT+** immediately writes a REST event at the cursor and advances
+- Cursor wrap past the last step exits step record automatically
+- Single tap **REC** while in step record exits the mode and arms live record normally
+- Octave change is locked in step record (OCT±  are repurposed for TIE / REST)
+
+### Per-track octave setting
+
+**Files:** `firmware/src/core.h`, `firmware/src/ui_input.c`, `firmware/src/ui_draw.c`,
+`firmware/src/seq.c`, `firmware/src/eng_drum.c`, `firmware/src/eng_slice.c`
+
+The keyboard octave shift is now remembered independently per track rather than being
+a single global value.
+
+- `song.octave` changed from `int8_t` to `int8_t octave[NTRK]` — one slot per track
+- Switching tracks restores that track's last-used octave setting immediately
+- Range remains −3 to +3; OCT± and the both-pressed reset all operate on the selected track
+
+### Auto-load last project on startup
+
+**Files:** `firmware/src/project.c`, `firmware/src/settings_persist.c`
+
+The last project that was saved or explicitly loaded is restored automatically when the
+device powers on, without requiring the user to navigate to the PROJECT page.
+
+- `persist_t.last_slot` — 1-indexed slot index (0 = none) written to flash on every
+  save or load via `persist_set_last_slot()`; persisted in PER5 settings block
+- On power-on, `autosave_boot()` restores `proj_cur` from `last_slot` after the
+  autosave image is loaded; if no autosave image exists the project is loaded directly
+- Settings magic bumped to `PER5` (`0x50455235`); older PER4 / PER3 / PER2 / PER1
+  images are migrated cleanly with `last_slot = 0` (no auto-load until a save occurs)
+
+---
+
 Changes to base Felucca firmware (v1.9.0). All changes are additive or behavioural
 extensions — no existing features were removed or broken.
 

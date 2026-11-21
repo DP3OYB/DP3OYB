@@ -160,12 +160,12 @@ static uint32_t oct_leds(void)
     if (ui.confirm || act_cols())
         return 1u | (ui.confirm || act_ready() ? OCT_BREATH : 0u);
     if (mom.n && mom_down())                            /* MOMENTARY: OCT+ keeps the changes */
-        return (song.octave < 0 ? 1u : 0u) | OCT_BREATH;
+        return (song.octave[song.sel] < 0 ? 1u : 0u) | OCT_BREATH;
     if (kb_hold[song.sel % NTRK])                      /* NOTE HOLD active on selected track: OCT+ breathes */
-        return (song.octave < 0 ? 1u : 0u) | OCT_BREATH;
+        return (song.octave[song.sel] < 0 ? 1u : 0u) | OCT_BREATH;
     if (env_retrig[song.sel % NTRK])                   /* ENV RETRIG active on selected track: OCT- breathes */
-        return (song.octave > 0 ? 2u : 0u) | OCT_BREATH_DN;
-    return (song.octave < 0 ? 1u : 0u) | (song.octave > 0 ? 2u : 0u);
+        return (song.octave[song.sel] > 0 ? 2u : 0u) | OCT_BREATH_DN;
+    return (song.octave[song.sel] < 0 ? 1u : 0u) | (song.octave[song.sel] > 0 ? 2u : 0u);
 }
 
 /* the key LEDs on the grid, bit k = key k: the white keys show where the selected lane hits on the page
@@ -432,7 +432,9 @@ static void ui_leds(void)
         led_put(nl, panel.btn[B_FX], 1);                /* FX LATCH: lit while an effect or a macro is on */
     if (ui.layer)                                       /* the layer's button breathes while its map is up */
         led_put(nb, panel.btn[layer_btn()], 1);
-    led_put(nl, panel.btn[B_REC], song.rec != 0u && ui.layer != LAYER_REC);   /* (its layer: it breathes) */
+    led_put(nl, panel.btn[B_REC], (song.rec != 0u || song.step_mode) && ui.layer != LAYER_REC);   /* (its layer: it breathes) */
+    if (song.step_mode && ui.layer != LAYER_REC)
+        led_put(nb, panel.btn[B_REC], 1);                /* step_mode: REC breathes */
     k = oct_leds();
     led_put(nl, panel.btn[B_OCTDN], (int)(k & 1u));
     led_put(nl, panel.btn[B_OCTUP], (int)((k >> 1) & 1u));
@@ -1376,6 +1378,8 @@ static uint32_t btn_hold(uint32_t *t0, uint32_t label, uint32_t now, int hold_ok
 
 /* the quick layers: ui_layer.c (included after this file) */
 static void layer_masks(void);
+static void rec_dtap_tick(void);
+static void rec_dtap_abort(void);
 static void layer_arm(uint32_t pressed, uint32_t now);
 static uint32_t layer_held(void);
 static int layer_knobs_quiet(void);
@@ -1651,10 +1655,11 @@ static void ui_input(void)
             name_close();
             ui.force = 1;
             song.seq_mode = 0;
+            song.step_mode = 0;
+            rec_dtap_abort();
         }
     }
-    if (rec == BT_TAP && !ui.menu && !ui.confirm && !name_on())   /* REC pressed in another layer (REC alone: */
-        rec_tap();                                      /* its layer's tap); nothing in the menu, a dialog or NAME */
+    rec_dtap_tick();
     if ((ui.menu || ui.confirm || name_on()) && ((pressed >> panel.btn[B_PLAY]) & 1u) &&
         (song.playing || chain_busy() || seq_counting()))
         transport_req = 2;                              /* PLAY stops a transport from the menu, a dialog, NAME (1.8;
@@ -1778,22 +1783,35 @@ static void ui_input(void)
             if (act_cols() || layer_set_open() || ui.ml.on)
                 break;
             if ((fm1_in.buttons & both) == both) {
-                song.octave = 0;
+                song.octave[song.sel] = 0;
                 oct_dn_t = 0;
+                break;
+            }
+            if (song.step_mode) {   /* step_mode: OCT- immediately inserts TIE */
+                if (!chain_busy() && !layer_set_open() && !ui.confirm) {
+                    track_t *t = TSEL;
+                    uint8_t pre = ui.cursor;
+                    step_t *st = &t->step[ui.cursor];
+                    step_undo_take(t, 0);
+                    st->time = ST_TIE; st->n = 0; st->hit = 0;
+                    cursor_set(ui.cursor + 1);
+                    ui.force = 1;
+                    if (ui.cursor < pre) { song.step_mode = 0; } else { ui_message("TIE"); }
+                }
                 break;
             }
             /* double-tap: second press within 400 ms toggles envelope retrigger */
             if (oct_dn_t && now - oct_dn_t < 250u * 1000u * FM1_TICKS_PER_US) {
                 oct_dn_t = 0;
-                if (song.octave > -3)                  /* undo the first tap's octave shift */
-                    song.octave++;
+                if (song.octave[song.sel] > -3)        /* undo the first tap's octave shift */
+                    song.octave[song.sel]++;
                 env_retrig_toggle();
                 ui_message(env_retrig[song.sel % NTRK] ? "RETRIG ON" : "RETRIG OFF");
                 break;
             }
             oct_dn_t = now;
-            if (song.octave > -3)
-                song.octave--;
+            if (song.octave[song.sel] > -3)
+                song.octave[song.sel]--;
             break;
         }
         case B_OCTUP: {
@@ -1803,22 +1821,35 @@ static void ui_input(void)
             if (act_cols() || layer_set_open() || ui.ml.on)
                 break;
             if ((fm1_in.buttons & both) == both) {
-                song.octave = 0;
+                song.octave[song.sel] = 0;
                 oct_up_t = 0;
+                break;
+            }
+            if (song.step_mode) {   /* step_mode: OCT+ immediately inserts REST */
+                if (!chain_busy() && !layer_set_open() && !ui.confirm) {
+                    track_t *t = TSEL;
+                    uint8_t pre = ui.cursor;
+                    step_t *st = &t->step[ui.cursor];
+                    step_undo_take(t, 0);
+                    st->time = ST_REST; st->n = 0; st->hit = 0;
+                    cursor_set(ui.cursor + 1);
+                    ui.force = 1;
+                    if (ui.cursor < pre) { song.step_mode = 0; } else { ui_message("REST"); }
+                }
                 break;
             }
             /* double-tap: second press within 400 ms toggles note hold */
             if (oct_up_t && now - oct_up_t < 250u * 1000u * FM1_TICKS_PER_US) {
                 oct_up_t = 0;
-                if (song.octave < 3)                   /* undo the first tap's octave shift */
-                    song.octave--;
+                if (song.octave[song.sel] < 3)         /* undo the first tap's octave shift */
+                    song.octave[song.sel]--;
                 kb_hold_toggle();
                 ui_message(kb_hold[song.sel % NTRK] ? "HOLD ON" : "HOLD OFF");
                 break;
             }
             oct_up_t = now;
-            if (song.octave < 3) {
-                song.octave++;
+            if (song.octave[song.sel] < 3) {
+                song.octave[song.sel]++;
                 oct_inc = 1;
             }
             break;
@@ -1852,6 +1883,17 @@ static void ui_input(void)
     lock_keys();                                        /* (a grid key on a hit let go: the hit goes) */
     if (song.grid == 3u) {
         song_keys(notes);
+    } else if (song.step_mode && !layer_set_open() && !ui.confirm) {   /* universal step entry: any page, any track */
+        if (chain_busy()) {
+            if (notes) ui_message("STOP TO EDIT");
+        } else {
+            uint8_t pre = ui.cursor;
+            seq_entry(notes);
+            if (notes && song.step_mode) {
+                if (ui.cursor < pre) song.step_mode = 0;   /* wrapped past end: auto-exit */
+                ui.force = 1;                              /* update countdown */
+            }
+        }
     } else if (song.grid) {
         grid_keys(notes);
     } else if (song.seq_mode && cur_page()->graph == GR_ROLL) {   /* STEP */

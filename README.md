@@ -2,7 +2,7 @@
 
 [![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
 
-A 6-track performance groovebox enhanced from [Felucca](https://github.com/hugelton/Felucca). Adds 2 LFOs with sequencer trigs, retriggering envelopes, mixer and track sequencing views with quick-access controls, note hold, LED-assisted chord-mode, and a redesigned UI optimized for live use. Current version: **1.0.8**
+A 6-track performance groovebox enhanced from [Felucca](https://github.com/hugelton/Felucca). Adds 2 LFOs with sequencer trigs, retriggering envelopes, mixer and track sequencing views with quick-access controls, note hold, LED-assisted chord-mode, and a redesigned UI optimized for live use. Current version: **1.0.9**
 
 [Try it in your browser](https://DP3OYB.github.io/DP3OYB/try/) — no FM-1 needed.
 
@@ -51,6 +51,7 @@ Tap to go to that family's first page; tap again to step through its pages. The 
 | --- | --- |
 | **PLAY** | Start / stop; lit green while playing |
 | **REC** | Arm the track to record; if stopped, also starts playing |
+| **REC** double-tap | Toggle step record mode; REC LED breathes while active |
 | **HOME** tap | Go to home screen / close dialog |
 | **HOME** hold | Open / close menu |
 | **SAVE** tap | Load preset / save |
@@ -62,11 +63,25 @@ Tap to go to that family's first page; tap again to step through its pages. The 
 | --- | --- |
 | **OCT−** | Octave down; in dialogs and menus: back / cancel |
 | **OCT+** | Octave up; in dialogs and menus: confirm |
-| **OCT− + OCT+** | Octave reset |
+| **OCT− + OCT+** | Octave reset (per track) |
 | **OCT+** double-tap | Toggle NOTE HOLD on the selected track |
 | **OCT−** double-tap | Toggle ENV RETRIG on the selected track |
 | OCT+ breathes | NOTE HOLD is active on the selected track |
 | OCT− breathes | ENV RETRIG is active on the selected track |
+
+Octave setting is **per track** — each track remembers its own octave shift independently.
+
+### Step record mode
+
+Double-tap **REC** to enter step record mode (REC LED breathes). Notes played on the keyboard are written one step at a time into the sequencer. Each key press advances the cursor to the next step automatically; the mode ends when the cursor wraps past the last step.
+
+| Button | In step record |
+| --- | --- |
+| **OCT−** | Insert TIE at the cursor and advance |
+| **OCT+** | Insert REST at the cursor and advance |
+| **REC** single tap | Exit step record and arm live record |
+
+The cursor position is shown on the SEQ step page.
 
 ### Hold layers
 

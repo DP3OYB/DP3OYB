@@ -619,7 +619,7 @@ static const preset_t SLICE_PRESETS[] = {
 /* the lowest key is slice 0 (C4 + ROOT), no scale */
 static int32_t slice_keys(const track_t *t, uint32_t k)
 {
-    return clamp(SLC_BASE + t->p[P_ROOT] + 12 * song.octave + (int32_t)k, 0, 127);
+    return clamp(SLC_BASE + t->p[P_ROOT] + 12 * song.octave[(uint32_t)(t - trk)] + (int32_t)k, 0, 127);
 }
 
 static const engine_t ENG_SLICE = {

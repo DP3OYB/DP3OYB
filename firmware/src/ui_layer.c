@@ -321,15 +321,76 @@ static void layer_show(void)
     }
 }
 
+/* double-tap REC detection: statics shared between rec_dtap_tick/abort (called every frame from ui_input.c)
+ * and layer_tap (called on each REC tap). Two taps within 400 ms toggle step_mode instead of arming. */
+static uint32_t rec_dtap_ms;
+static uint8_t rec_dtap_pending, rec_dtap_play, rec_dtap_step;
+
+static void rec_dtap_tick(void)
+{
+    if (rec_dtap_pending && fm1_ms - rec_dtap_ms >= 400u) {
+        rec_dtap_pending = 0;
+        if (rec_dtap_step) {           /* deferred rec_tap from a single tap while step_mode was on */
+            rec_dtap_step = 0;
+            song.step_mode = 0;
+            rec_tap();
+            ui.force = 1;
+        } else if (rec_dtap_play) {
+            rec_dtap_play = 0;
+            transport_req = 1;
+        }
+    }
+}
+
+static void rec_dtap_abort(void)   /* call when step_mode is cleared externally (menu open, etc.) */
+{
+    rec_dtap_pending = 0;
+    rec_dtap_play = 0;
+    rec_dtap_step = 0;
+}
+
 /* a tap: the button's page; the hint until its layer has been opened once (unless the tap said something, or
  * opened NAME: EDIT on USER / PROJECT renames; never over a dialog or the menu) */
 static void layer_tap(uint32_t l)
 {
     uint8_t m = ui.msg_t;
     if (l == LAYER_REC) {
+        if (rec_dtap_pending && fm1_ms - rec_dtap_ms < 400u) {
+            /* second tap within 400 ms */
+            rec_dtap_pending = 0;
+            rec_dtap_play = 0;
+            if (rec_dtap_step) {       /* was step_mode: turn it off, don't arm */
+                rec_dtap_step = 0;
+                song.step_mode = 0;
+                ui.entry_open = 0;
+                ui.force = 1;
+                ui_message("STEP RECORD OFF");
+                return;
+            }
+            song.step_mode ^= 1u;      /* normal double-tap: toggle step_mode */
+            if (song.step_mode)
+                song.rec &= ~(uint8_t)(1u << song.sel);
+            ui.entry_open = 0;
+            ui.force = 1;
+            ui_message(song.step_mode ? "STEP RECORD ON" : "STEP RECORD OFF");
+            return;
+        }
+        if (song.step_mode) {          /* first tap while step_mode on: defer rec_tap, wait for double-tap */
+            rec_dtap_step = 1;
+            rec_dtap_play = 0;
+            rec_dtap_ms = fm1_ms;
+            rec_dtap_pending = 1;
+        } else {
         uint32_t idle = !song.playing && !seq_counting() && transport_req != 1u;
+        uint8_t tr_before = transport_req;
+        rec_dtap_step = 0;
         rec_tap();
+        rec_dtap_play = transport_req != tr_before && (uint8_t)transport_req == 1u;
+        if (rec_dtap_play) transport_req = tr_before;   /* hold back transport start */
+        rec_dtap_ms = fm1_ms;
+        rec_dtap_pending = 1;
         lys.nv.go = (uint8_t)(idle && transport_req == 1u);
+        }
     } else {
         page_tap(LAYERS[l].btn);
     }
