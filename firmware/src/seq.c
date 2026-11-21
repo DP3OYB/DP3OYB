@@ -954,8 +954,10 @@ static void seq_start(void)
         t->rat_left = 0;
         t->nd_late = t->nd_early = ND_NONE;
         t->nd_fired = 0;
-        if (t->p[P_LTRIG] && t->p[P_LSYNC])        /* LFO 2 FREE + SYNC: in time with the bars from PLAY */
+        if (t->p[P_LTRIG] && t->p[P_LSYNC])        /* TRIG + SYNC: anchor both LFOs to bar 1 from PLAY */
             t->lfo_ph = (uint32_t)t->p[P_LPHASE] << 25;
+        if (t->p[P_L2TRIG] && t->p[P_L2SYNC])
+            t->lfo2_ph = (uint16_t)((uint32_t)t->p[P_L2PHASE] << 9);
     }
     song.tick = 0;
     beat_pos = 0; beat_n = 0;                      /* the ARP LED's beat from the top too */
@@ -1441,7 +1443,7 @@ static void lfo_grid_trig(uint32_t n)
             if (lfo_trig_pos[i][1] >= period) {
                 lfo_trig_pos[i][1] -= period;
                 if (lfo_trig_pos[i][1] >= period) lfo_trig_pos[i][1] = 0;
-                t->lfo2_ph = 0u;
+                t->lfo2_ph = (uint16_t)((uint32_t)t->p[P_L2PHASE] << 9);
             }
         }
     }
