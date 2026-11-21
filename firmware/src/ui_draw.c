@@ -899,7 +899,8 @@ static void draw_foot(void)
     int32_t x;
     uint32_t show_hint = ui.home || pg->fam == FAM_FX || pg->fam == FAM_SCL ||
                          pg->fam == FAM_EDIT || pg->fam == FAM_GLO || pg->fam == FAM_SEQ ||
-                         pg->fam == FAM_TRK;
+                         pg->fam == FAM_TRK ||
+                         pg->graph == GR_USER || pg->graph == GR_SLOTS;
     sound_name(t, pn);
     if (ui.home) {                                     /* TWIDDLE: last in the FAM_TRK sequence */
         uint32_t i, n = 1;                             /* +1 for TWIDDLE itself */
@@ -954,7 +955,7 @@ static void draw_foot(void)
         kh[1] = (khint_t){KC_OCTDN, hb + 5};
         if (rn) {                                     /* USER / PROJECT: "EDIT NAME" between them */
             kh[2] = kh[1];
-            kh[1] = (khint_t){KC_EDIT, cur_page()->graph == GR_EVENTS ? "DELETE" : "NAME"};
+            kh[1] = (khint_t){KC_EDIT, cur_page()->graph == GR_EVENTS ? "DELETE" : "RENAME"};
             cv_key_row(8, 232, 2, kh, 3, (act_ready() ? 1u : 0u) | (rn == 2u ? 2u : 0u) | 4u, T_BG);
         } else {
             cv_key_row(8, 232, 2, kh, 2, act_ready() ? 3u : 2u, T_BG);

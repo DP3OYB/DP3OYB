@@ -1152,7 +1152,7 @@ static void act_do(void)
         return;
     }
 #endif
-    if (cur_page()->graph == GR_USER) {                   /* 1 LOAD, 2 ERASE, 3 SAVE (the NAME screen first) */
+    if (cur_page()->graph == GR_USER) {                   /* OCT-=LOAD, OCT+=ERASE, both=SAVE; EDIT hold=COPY */
         if (c > 1u)
             ui.act = 0;
         if (c == 2u && up_used(ui.uslot) && !transport_busy())
@@ -1432,8 +1432,7 @@ static int page_tap(uint32_t b)
         return 1;
     }
     if (b == B_EDIT && !ui.home && (cur_page()->graph == GR_USER || cur_page()->graph == GR_SLOTS)) {
-        name_rename();                                  /* SAVE > USER / PROJECT: EDIT renames the slot */
-        return 1;
+        return 1;                                       /* handled by edit_t0 btn_hold: tap=rename, hold=copy */
     }
     for (f = FAM_HOME + 1u; f < FAM_COUNT; f++)        /* (GLO SEQ SAVE ..: HOME is ui_input's, home_tap) */
         if (FAM_BTN[f] == b && b != B_HOME) {
@@ -1542,10 +1541,27 @@ static void ui_notices(void)
     }
 }
 
+/* SAVE > USER / PROJECT: EDIT hold — copy the selected slot to the first empty slot past it (wrap) */
+static void name_copy(void)
+{
+    int user = cur_page()->graph == GR_USER;
+    uint32_t src = user ? ui.uslot : (uint32_t)song.g[G_SLOT] - 1u;
+    uint32_t slots = user ? UP_SLOTS : (uint32_t)CHAIN_SILENT;
+    uint32_t i, dst;
+    for (i = 1u; i <= slots; i++) {
+        dst = (src + i) % slots;
+        if (user ? !up_used(dst) : !project_used(dst))
+            break;
+    }
+    if (i > slots) { ui_message("EMPTY SLOT"); return; }
+    if (transport_busy()) { ui_message("STOP TO SAVE"); return; }
+    name_open_copy(user ? NK_USER_COPY : NK_PROJ_COPY, src, dst);
+}
+
 static void ui_input(void)
 {
     uint32_t pressed = fm1_input_edges(0), notes = fm1_input_note_edges(), now = fm1_ticks(), id, b, k;
-    uint32_t home, rec, save;
+    uint32_t home, rec, save, edit;
     uint32_t oct;
     uint32_t lay, combo = 0, lytap, lkeys, glo, kq = 0;
     int32_t s, sel = 0, ks[4] = {0, 0, 0, 0};
@@ -1581,6 +1597,11 @@ static void ui_input(void)
     home = btn_hold(&ui.home_t0, B_HOME, now, 1);
     rec = btn_hold(&ui.rec_t0, B_REC, now, 0);          /* (a tap; held, the REC layer: ui_layer.c) */
     save = btn_hold(&ui.save_t0, B_SAVE, now, !ui.menu && !ui.confirm);   /* held: UNDO (ui.c undo_swap) */
+    {   /* EDIT on USER / PROJECT pages: tap = rename, hold = copy */
+        uint32_t g = ui.home ? GR_NONE : cur_page()->graph;
+        edit = btn_hold(&ui.edit_t0, B_EDIT, now,
+                        !ui.menu && !ui.confirm && !name_on() && (g == GR_USER || g == GR_SLOTS));
+    }
     layer_lock_input(pressed);                          /* (#83: a button closes a locked layer) */
     layer_arm(pressed, now);
     if (((pressed >> panel.btn[B_REC]) & 1u) && ui.ly == LAYER_REC)
@@ -1686,6 +1707,10 @@ static void ui_input(void)
         undo_swap();
     else if (save == BT_TAP && !ui.confirm)             /* SAVE acts on release (a hold is the undo) */
         open_family(FAM_SAVE);
+    if (edit == BT_TAP)
+        name_rename();                                  /* tap: rename the selected slot */
+    else if (edit == BT_HOLD)
+        name_copy();                                    /* hold: copy the selected slot to the next empty */
     if (ui.confirm) {                                   /* OCT- cancels, OCT+ does it; nothing else reacts */
         if (oct & 2u) {
             uint32_t kind = ui.confirm;

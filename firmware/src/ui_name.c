@@ -24,7 +24,8 @@
  *                takes it whole, then the keys edit it as any other).
  *   LEDs         every key that types or edits is lit; the key whose letters are being cycled blinks.
  * Spaces at either end are dropped when it is written; an empty name: USER the automatic one, PROJECT none. */
-enum { NK_NONE, NK_USER_SAVE, NK_USER_RENAME, NK_PROJ_SAVE, NK_PROJ_RENAME };
+enum { NK_NONE, NK_USER_SAVE, NK_USER_RENAME, NK_PROJ_SAVE, NK_PROJ_RENAME, NK_USER_COPY, NK_PROJ_COPY };
+#define nm_is_user_kind(k) ((k) == NK_USER_SAVE || (k) == NK_USER_RENAME || (k) == NK_USER_COPY)
 #define NM_LEN 12u
 #define NM_TAP_MS 800u                                 /* multi-tap: the next letter within this */
 #define NM_REP_MS 450u                                 /* a held arrow / DELETE repeats after this, */
@@ -122,6 +123,28 @@ static void name_rename(void)
         ui_message("STOP TO SAVE");
     else
         name_open(user ? NK_USER_RENAME : NK_PROJ_RENAME, k);
+}
+
+/* open the name screen to copy slot src into dst; kind NK_USER_COPY or NK_PROJ_COPY */
+static void name_open_copy(uint32_t kind, uint32_t src, uint32_t dst)
+{
+    char b[16];
+    uint32_t n;
+    name_open(kind == NK_USER_COPY ? NK_USER_SAVE : NK_PROJ_SAVE, dst);
+    nm.kind = (uint8_t)kind;
+    b[0] = 0;
+    if (kind == NK_USER_COPY)
+        up_name(src, b);
+    else
+        project_name(src, b);
+    n = str_len(b);
+    if (n > 10u) n = 10u;
+    b[n] = '0'; b[n + 1u] = '1'; b[n + 2u] = 0;
+    str_cpy(nm.s, b, sizeof nm.s);
+    nm.len = nm.cur = (uint8_t)str_len(nm.s);
+    if (kind == NK_USER_COPY)
+        nm.cat = (uint8_t)up_cat(src);
+    ui.force = 1;
 }
 
 static void nm_commit(void)                            /* the letter being cycled is kept: the cursor past it */
@@ -229,7 +252,7 @@ static void nm_knob(uint32_t k, int32_t s)             /* KNOB 1 the cursor, KNO
     int32_t i, n = (int32_t)sizeof NM_SET - 1;
     nm_commit();
     if (k == 2u) {                                     /* USER: the category (no wrap); PROJECT: a random name */
-        if (nm.kind <= NK_USER_RENAME)
+        if (nm_is_user_kind(nm.kind))
             nm.cat = (uint8_t)clamp((int32_t)nm.cat + s, CAT_BASS, CAT_OTHER);
         else
             nm_random();
@@ -271,6 +294,12 @@ static void name_ok(void)
         up_ui_named(3, nm.slot, b, nm.cat);
         break;
     case NK_PROJ_SAVE:
+        project_save_as(nm.slot, b);
+        break;
+    case NK_USER_COPY:
+        up_ui_named(2, nm.slot, b, nm.cat);
+        break;
+    case NK_PROJ_COPY:
         project_save_as(nm.slot, b);
         break;
     default:
@@ -338,8 +367,9 @@ static uint32_t name_leds(void)
 #define NM_CX(i) (12 + 18 * (int32_t)(i))              /* cell i: 18 x 22 at y 18 of the card */
 static void nm_title(char *b)
 {
-    str_cpy(b, nm.kind == NK_USER_SAVE || nm.kind == NK_PROJ_SAVE ? "SAVE " : "NAME ", 8);
-    if (nm.kind <= NK_USER_RENAME)
+    str_cpy(b, nm.kind == NK_USER_COPY || nm.kind == NK_PROJ_COPY ? "COPY " :
+               nm.kind == NK_USER_SAVE || nm.kind == NK_PROJ_SAVE ? "SAVE " : "NAME ", 8);
+    if (nm_is_user_kind(nm.kind))
         up_slot_label(b + 5, nm.slot);
     else
         str_cpy(b + 5, nm.ph, 12);                     /* "PROJECT A" */
@@ -355,7 +385,7 @@ static void nm_draw_field(void)
     fmt_int(b, nm.len);
     str_cpy(b + str_len(b), "/12", 4);
     cv_text_r(231, 2, &AF_S, b, nm.len >= NM_LEN ? T_WARN : T_DIM, T_SURF);
-    if (nm.kind <= NK_USER_RENAME)                     /* USER: the category KNOB 3 sets, left of the count */
+    if (nm_is_user_kind(nm.kind))                      /* USER: the category KNOB 3 sets, left of the count */
         cv_text_r(231 - text_w(&AF_S, b) - 10, 2, &AF_S, CAT_NAME[nm.cat % CAT_N], T_THEME, T_SURF);
     for (i = 0; i < NM_LEN; i++) {
         int32_t x = NM_CX(i);
@@ -438,9 +468,10 @@ static void nm_draw_foot(void)
 {
     khint_t a[3], b[3];
     int ok = !transport_busy();
-    a[0] = (khint_t){KC_OCTUP, nm.kind == NK_USER_SAVE || nm.kind == NK_PROJ_SAVE ? "SAVE" : "RENAME"};
+    a[0] = (khint_t){KC_OCTUP, nm.kind == NK_USER_COPY || nm.kind == NK_PROJ_COPY ? "COPY" :
+                               nm.kind == NK_USER_SAVE || nm.kind == NK_PROJ_SAVE ? "SAVE" : "RENAME"};
     a[1] = (khint_t){KC_OCTDN, "CANCEL"};
-    a[2] = (khint_t){KC_K3, nm.kind <= NK_USER_RENAME ? "CATEGORY" : "RANDOM"};   /* (1.2: the category, a random name) */
+    a[2] = (khint_t){KC_K3, nm_is_user_kind(nm.kind) ? "CATEGORY" : "RANDOM"};   /* (1.2: the category, a random name) */
     b[0] = (khint_t){KC_K1, "MOVE"};
     b[1] = (khint_t){KC_K2, "CHAR"};
     b[2] = (khint_t){KC_KEYS, "TYPE"};

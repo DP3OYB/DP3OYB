@@ -182,6 +182,7 @@ static struct {
     uint8_t tl_clean;            /* SAVE > TOOLS: KNOB 2 turned on past INIT, CLEAN INIT picked (1.5.5, #190) */
     uint32_t rec_t0;             /* REC press time: a tap arms (btn_hold, no hold: held, REC opens its layer) */
     uint32_t save_t0;           /* SAVE press time (btn_hold: held = UNDO) */
+    uint32_t edit_t0;           /* EDIT press time on USER/PROJECT pages (tap=rename, hold=copy) */
     uint8_t confirm;             /* the OCT- / OCT+ dialog: CF_*, 0 = none */
     uint8_t confirm_trk;         /* the track it clears, the slot it overwrites */
     uint8_t uslot;               /* SAVE > USER: the selected user preset slot */
