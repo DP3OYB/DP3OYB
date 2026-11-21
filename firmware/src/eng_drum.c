@@ -306,7 +306,7 @@ static void drum_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
 static int32_t drum_keys(const track_t *t, uint32_t k)
 {
     (void)t;
-    return clamp(29 + 12 * song.octave + (int32_t)k, 0, 127);
+    return clamp(29 + 12 * song.octave[(uint32_t)(t - trk)] + (int32_t)k, 0, 127);
 }
 
 /* {KIT, TUNE, TONE, DECY, SNAP, ACC, KICK, DRV}; every kit suggests the BEAT pattern (GM notes) */

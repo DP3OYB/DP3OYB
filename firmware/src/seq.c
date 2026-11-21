@@ -170,7 +170,7 @@ static uint32_t kb_pitch(const track_t *t, uint32_t k, int32_t oct)
 static uint32_t kb_map(const track_t *t, uint32_t k)
 {
     int32_t n = kb_engine(t, k);
-    return n >= 0 ? (uint32_t)n : kb_pitch(t, k, song.octave);
+    return n >= 0 ? (uint32_t)n : kb_pitch(t, k, song.octave[trk_index(t)]);
 }
 
 #include "chord.c"
@@ -191,7 +191,7 @@ static void arp_add(track_t *t, uint32_t note)
          * pressed in. Anything else (MIDI IN) plays as it came, as before */
         uint8_t *hk = held_key[trk_index(t)];
         hk[t->nheld] = in_key && song.grid != 1u && kb_engine(t, k) < 0
-                           ? (uint8_t)(in_key | (uint32_t)(song.octave + 3) << 5) : 0u;
+                           ? (uint8_t)(in_key | (uint32_t)(song.octave[trk_index(t)] + 3) << 5) : 0u;
         held_dt[trk_index(t)][t->nheld] = (int8_t)(hk[t->nheld] ? (int32_t)note - kb_note[k] : 0);
         t->held[t->nheld++] = (uint8_t)note;
     }

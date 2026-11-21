@@ -376,12 +376,12 @@ _Static_assert(sizeof(track_t) % 16u == 0, "track_t: a multiple of 16 bytes (a c
 
 typedef struct {
     int16_t g[G_COUNT];
-    uint8_t playing, seq_mode;
+    uint8_t playing, seq_mode, step_mode;  /* step_mode: universal step entry (double-tap REC) */
     uint8_t grid;                /* 1: the keys are the DRUM grid (ui.c grid_on): only the lane keys play (seq.c);
                                   * 2: NAME (ui_name.c): no key plays; 3: SONG, A..D are its (seq.c song_key) */
     uint8_t rec;                 /* live recording armed: bit per track */
     uint8_t sel;                 /* selected track 0..NTRK-1: keys, pages, editor */
-    int8_t octave;
+    int8_t octave[NTRK];            /* per-track keyboard octave shift -3..+3 */
     uint32_t tick;               /* sub-blocks since play */
     uint32_t cpu_q8;             /* audio ISR load, 1/256 */
     uint32_t master_q12;

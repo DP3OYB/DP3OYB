@@ -829,6 +829,8 @@ static char proj_name[PROJ_NAME_LEN + 1u]    /* the name of the music as it is n
 #define PROJ_NO_SLOT 0xFFu
 static uint8_t proj_cur = PROJ_NO_SLOT;      /* the slot the music was loaded from or last saved to (a rename of it
                                               * renames the music too); PROJ_NO_SLOT none (the editor's restore) */
+static uint8_t proj_last_slot;               /* 1-indexed last saved/loaded slot (1..CHAIN_SILENT); 0 = none;
+                                              * runtime copy, exported to persist_t.last_slot by settings_export */
 static union {                               /* serialized main-loop work; no retained expansion */
     project_store_t s;
     uint8_t raw[PROJ_STORE_SIZE];              /* (the staging of a backup object, up to a storage object: editor_backup.c) */
@@ -949,6 +951,7 @@ static void project_capture(project_t *p)
 /* the music as it is now -> slot, named `name` (0: the current name; "" none); 0 saved, nonzero refused or failed.
  * The current name becomes the saved one */
 static void proj_kept_now(void);
+static void persist_set_last_slot(uint8_t slot1);   /* defined after settings_persist.c include */
 static int project_save_as(uint32_t slot, const char *name)
 {
     project_t *p = &proj_scratch;
@@ -975,6 +978,7 @@ static int project_save_as(uint32_t slot, const char *name)
         proj_cur = (uint8_t)(slot % CHAIN_SILENT);
         pat_from_set((slot % CHAIN_SILENT) + 1u);
         proj_kept_now();
+        persist_set_last_slot(proj_cur + 1u);
         ui_message("SAVED");
         return 0;
     }
@@ -1262,6 +1266,7 @@ static void project_load(uint32_t slot)
     if (!project_restore_runtime(&proj_scratch)) {
         proj_cur = (uint8_t)(slot % CHAIN_SILENT);
         pat_from_set((slot % CHAIN_SILENT) + 1u);
+        persist_set_last_slot(proj_cur + 1u);
     }
 }
 
@@ -1275,6 +1280,13 @@ static void project_load(uint32_t slot)
 static persist_t persist_saved __attribute__((section(".pool")));
 static uint8_t persist_pending;                 /* 1 requested, 2 waiting after a flash error */
 static uint32_t persist_retry_ms;
+static void persist_set_last_slot(uint8_t slot1)
+{
+    proj_last_slot = slot1;
+    persist_pending = 1;
+}
+#else
+static void persist_set_last_slot(uint8_t slot1) { proj_last_slot = slot1; }
 #endif
 
 static void persist_boot(void)                    /* before settings_init / panel_init */
@@ -1543,8 +1555,16 @@ static int autosave_boot(int allowed)
             if (!project_restore_runtime(&proj_scratch)) {
                 ui_message("RESTORED");
                 rc = 1;
+                /* restore slot identity: show the slot letter and allow saving back to it */
+                if (proj_last_slot > 0 && proj_last_slot <= CHAIN_SILENT) {
+                    proj_cur = proj_last_slot - 1u;
+                    pat_from_set(proj_last_slot);
+                }
             }
         }
+        /* no autosave (or restore failed): fall back to loading the last explicitly saved project */
+        if (!rc && proj_last_slot > 0 && proj_last_slot <= CHAIN_SILENT)
+            project_load(proj_last_slot - 1u);
     }
 #else
     (void)allowed;

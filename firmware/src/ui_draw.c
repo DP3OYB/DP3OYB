@@ -313,8 +313,8 @@ static void head_group(void)
         x = HEAD_GRP_R - (16 + 4 + text_w(&AF_M, b));
         x += cv_icon_mid(x, H_HEAD / 2, 16, ICON_X_SONG, T_MID, T_BG);   /* SONG: the disc */
     } else {
-        str_cpy(b, song.octave > 0 ? "+" : "", sizeof b);
-        fmt_int(b + str_len(b), song.octave);
+        str_cpy(b, song.octave[song.sel] > 0 ? "+" : "", sizeof b);
+        fmt_int(b + str_len(b), song.octave[song.sel]);
         x = HEAD_GRP_R - (text_w(&AF_S, "OCT") + 4 + text_w(&AF_M, b));
         GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
         x = cv_text(x, HEAD_SY, &AF_S, "OCT", T_MID);
@@ -332,11 +332,12 @@ static void draw_head(void)
     uint32_t rec = (song.rec >> song.sel) & 1u ? 2u : song.rec != 0u;   /* 2 the selected track armed, 1 another */
     char sl[3];
     int slot = head_slot(sl);
-    uint32_t sig = (uint32_t)song.playing * 3u + rec * 5u + (uint32_t)(song.octave + 8) * 11u + song.sel * 13131u +
+    uint32_t sig = (uint32_t)song.playing * 3u + rec * 5u + (uint32_t)(song.octave[song.sel] + 8) * 11u + song.sel * 13131u +
                    (ui.msg_t ? str_hash(7u, ui.msg) : ui.layer * 7919u + (uint32_t)layer_locked() * 3u) + (uint32_t)song.g[G_BPM] * 101u + (ui.bpm_t != 0) * 31u +
                    (uint32_t)seq_counting() * 7u + (ui_prefs & PREF_BPM_LOCK) * 4099u +
                    (uint32_t)batt_shown() * 7777u + (chain.running ? (chain.row + 1u) * 104729u : 0u) +
-                   (slot ? str_hash(11u, sl) : 0u) + (uint32_t)midi_lit(song.sel) * 15485863u;   /* (1.5.5) */
+                   (slot ? str_hash(11u, sl) : 0u) + (uint32_t)midi_lit(song.sel) * 15485863u +   /* (1.5.5) */
+                   (uint32_t)song.step_mode * 97u + (song.step_mode ? (uint32_t)((int32_t)TSEL->p[P_SLEN] - (int32_t)ui.cursor) * 1009u : 0u);
     int msg = ui.msg_t || ui.layer;
     int centre = !msg || ui.bpm_t || ui.layer == LAYER_GLO;   /* the BPM being changed: it stays, the message right */
     int32_t rx = HEAD_REC_X;
@@ -382,6 +383,16 @@ static void draw_head(void)
         rx += 1;                                       /* (the REC mark's cell after it, its ink 3 px on) */
     }
     draw_rec_mark(rx, T_BG);
+    if (song.step_mode) {                              /* step_mode: outlined REC icon + remaining-steps countdown */
+        int32_t rem = (int32_t)TSEL->p[P_SLEN] - (int32_t)ui.cursor;
+        char cnt[8];
+        if (rem < 1) rem = 1;
+        if (!song.rec)
+            cv_icon_mid(rx, H_HEAD / 2, 16, ICON_X_REC, T_REC, T_BG);
+        fmt_int(cnt, (uint32_t)rem);
+        GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
+        cv_text(rx + 18, HEAD_MY, &AF_M, cnt, T_REC);
+    }
     if (centre) {
         int32_t ib[4], lx = g.bx + g.b[2];             /* lx: the right end of the BPM (and its lock) */
         uint32_t id = song.playing ? (chain.running ? ICON_X_SONG : ICON_X_PLAY) : seq_counting() ? ICON_X_PLAY : ICON_X_STOP;
@@ -407,7 +418,7 @@ static void draw_head(void)
     } else {
         head_msg(-1, HEAD_MSG_W);
     }
-    if (!msg && (chain.running || song.octave))
+    if (!msg && (chain.running || song.octave[song.sel]))
         head_group();
     if (!(msg && centre))
         draw_battery(HEAD_BAT_X);
@@ -1377,7 +1388,7 @@ static void draw_columns(void)
  * Logo: 193 x 35 px, 2 bits a pixel (high bits first): 0 clear, 1 white, 2 red, 3 blue; source is the ASCII art
  * supplied at build time (. W R B). */
 #ifndef FM1_BUILD_VERSION
-#define FM1_BUILD_VERSION "1.0.8"
+#define FM1_BUILD_VERSION "1.0.9"
 #endif
 #define FM1_LOGO_W 193
 #define FM1_LOGO_H 35
