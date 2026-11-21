@@ -2,6 +2,34 @@
 
 ---
 
+## v1.1.0
+
+### Slot copy (USER and PROJECT pages)
+
+**Files:** `firmware/src/ui_input.c`, `firmware/src/ui_name.c`, `firmware/src/ui.c`, `firmware/src/ui_draw.c`
+
+Hold **EDIT** (~700 ms) on the USER 1/5 page to duplicate the current user preset to the
+first empty slot past it (wraps around). Same gesture on PROJECT 4/5 duplicates the
+current project. The name screen opens pre-filled with the source name truncated to 10
+characters and `01` appended. Save or edit the name to confirm; press **BACK** to cancel.
+
+- **EDIT tap** (unchanged) → rename the current slot
+- **EDIT hold** (new) → copy the current slot to the next empty slot
+- Shows `EMPTY SLOT` message if no free slot exists
+- TAP / HOLD badge added to the EDIT footer keycap on USER and PROJECT pages
+- Footer keycap label changed from **NAME** to **RENAME** to reflect tap behaviour
+
+### LFO2 phase fix
+
+**Files:** `firmware/src/seq.c`
+
+LFO2's `PHS` parameter was ignored when SYNC + TRIG were both active. The grid-trig
+reset path hardcoded `lfo2_ph = 0` instead of applying `P_L2PHASE`, and the PLAY-start
+anchor omitted LFO2 entirely. Both paths now apply the correct phase encoding
+`(uint16_t)((uint32_t)p[P_L2PHASE] << 9)`, making LFO2 behave consistently with LFO1.
+
+---
+
 ## v1.0.9
 
 ### Step record mode
