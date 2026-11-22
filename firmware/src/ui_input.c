@@ -1707,10 +1707,15 @@ static void ui_input(void)
         undo_swap();
     else if (save == BT_TAP && !ui.confirm)             /* SAVE acts on release (a hold is the undo) */
         open_family(FAM_SAVE);
-    if (edit == BT_TAP)
-        name_rename();                                  /* tap: rename the selected slot */
-    else if (edit == BT_HOLD)
-        name_copy();                                    /* hold: copy the selected slot to the next empty */
+    {   /* only act on USER / PROJECT pages; on all others EDIT navigates normally via btn_ev */
+        uint32_t g2 = ui.home ? GR_NONE : cur_page()->graph;
+        if (g2 == GR_USER || g2 == GR_SLOTS) {
+            if (edit == BT_TAP)
+                name_rename();                          /* tap: rename the selected slot */
+            else if (edit == BT_HOLD)
+                name_copy();                            /* hold: copy the selected slot to the next empty */
+        }
+    }
     if (ui.confirm) {                                   /* OCT- cancels, OCT+ does it; nothing else reacts */
         if (oct & 2u) {
             uint32_t kind = ui.confirm;
