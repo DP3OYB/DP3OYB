@@ -4,6 +4,16 @@
 
 ## v1.1.0
 
+### EDIT button regression fix
+
+**Files:** `firmware/src/ui_input.c`
+
+The slot copy feature introduced a regression: `btn_hold` returned `BT_TAP` on every EDIT
+release regardless of which page was active, causing `name_rename()` to fire on all pages
+and preventing access to EDIT menu pages unless the sequencer was running. Fixed by guarding
+the tap/hold handler with the same `GR_USER || GR_SLOTS` check used for `hold_ok`, so EDIT
+navigates normally on all other pages.
+
 ### Slot copy (USER and PROJECT pages)
 
 **Files:** `firmware/src/ui_input.c`, `firmware/src/ui_name.c`, `firmware/src/ui.c`, `firmware/src/ui_draw.c`
