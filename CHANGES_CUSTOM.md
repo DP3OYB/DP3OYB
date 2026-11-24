@@ -2,6 +2,36 @@
 
 ---
 
+## v1.1.1
+
+### Realtime recording wrap-around fix
+
+**Files:** `firmware/src/seq.c`
+
+A note held across the pattern boundary during realtime recording was cut short.
+For example, holding a note from step 9 of a 16-step pattern — audible for the full
+16-step loop — only played back as 8 steps.
+
+**Root cause:** `seq_hold` on TIE and NOTE steps was computed from `next_tie`
+(whether the adjacent step in memory is already ST_TIE). On the first recording
+pass the adjacent steps are not yet TIE steps — `rec_hold` writes each TIE one
+step ahead of the sequencer — so `seq_hold` dropped to 0 at the last pre-wrap TIE,
+the sequencer released the note before the wrap, and the wrap-around TIEs fired with
+`seq_n = 0` and had no effect.
+
+**Fix:** when a live hold is in progress (`rh_n > 0`), `seq_hold` is kept on:
+
+- **TIE steps**: hold unless the _next_ step is `rh_start` (the note-on step, which
+  re-fires there naturally).
+- **NOTE steps**: hold on the note-on step itself (`idx == rh_start`) so its first
+  TIE can extend it on the first pass.
+
+This bridges the gap between the last in-memory TIE and the step `rec_hold` is
+about to write, so the note sounds continuously through the wrap on the first recording
+pass and all subsequent playback passes.
+
+---
+
 ## v1.1.0
 
 ### EDIT button regression fix

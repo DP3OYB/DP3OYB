@@ -888,6 +888,109 @@ static void cv_bmpk(int32_t x0, int32_t y0, const char * const *rows, int32_t n,
                 cv_pset(x0 + x, y0 + y, c);
 }
 
+/* x pixel of the left edge of step i (0..63) in the 64-step footer bar.
+ * Layout (240 px total): 14 px margin | 4 banks of 16, each 50 px | 3×4 px inter-bank gaps | 14 px margin.
+ * Within a bank: 4 beat groups of 4 steps (11 px each) with 2 px gaps between groups.
+ * Each step is 2 px wide with a 1 px gap to the next within its beat group. */
+static int32_t foot64_x(uint32_t i)
+{
+    return 14 + (int32_t)(i / 16u) * 54
+              + (int32_t)((i % 16u) / 4u) * 13
+              + (int32_t)(i % 4u) * 3;
+}
+
+/* draw N bottom-anchored 2 px voice blocks (1 px gap between) at column x, width bw */
+static void foot64_vstack(int32_t x, int32_t bw, uint32_t voices, uint16_t col)
+{
+    if (voices >= 3u) {
+        cv_rect(x, 3, bw, 2, col);
+        cv_rect(x, 6, bw, 2, col);
+        cv_rect(x, 9, bw, 2, col);
+    } else if (voices == 2u) {
+        cv_rect(x, 6, bw, 2, col);
+        cv_rect(x, 9, bw, 2, col);
+    } else {
+        cv_rect(x, 9, bw, 2, col);
+    }
+}
+
+static void draw_foot64(const track_t *t)
+{
+    const step_t *steps = seq_steps(t);
+    uint32_t slen = (uint32_t)t->p[P_SLEN];
+    int is_drum = drum_track(t);
+    uint32_t epoly = ENGINES[t->eng_req % NENGINES]->poly;
+    int is_poly = !is_drum && epoly > 1u;
+    uint32_t i, last_voices = 0u;              /* voice count of the last NOTE step (poly/drum) */
+
+    for (i = 0; i < NSTEP; i++) {
+        const step_t *st = &steps[i];
+        int32_t x = foot64_x(i);
+
+        if (i >= slen) {
+            cv_rect(x, 9, 2, 2, T_RAISE);
+            continue;
+        }
+
+        if (is_poly || is_drum) {
+            /* poly/drum: each step column is independent so voice count is accurate per position */
+            if (st->time == ST_TIE) {
+                if (last_voices)
+                    foot64_vstack(x, 2, last_voices, T_ACCENT);  /* tied: inherit voice count */
+                else
+                    cv_rect(x, 9, 2, 2, T_RAISE);
+                continue;
+            }
+            if (!step_on(st)) {
+                cv_rect(x, 9, 2, 2, T_RAISE);
+                last_voices = 0u;
+                continue;
+            }
+            last_voices = is_drum
+                ? (uint32_t)__builtin_popcount(step_lanes(st))
+                : (uint32_t)(st->n > 1u ? st->n : 1u);
+            {
+                uint16_t col;
+                if (step_ratchet(st) > 1u)      col = T_REC;
+                else if (st->flags & SF_ACCENT)  col = T_ACCENT;
+                else                             col = T_TEXT;
+                foot64_vstack(x, 2, last_voices, col);
+            }
+            continue;
+        }
+
+        /* mono: TIE steps absorbed into the note's spanning block */
+        if (st->time == ST_TIE)
+            continue;
+        if (!step_on(st)) {
+            cv_rect(x, 9, 2, 2, T_RAISE);
+            continue;
+        }
+        {
+            uint32_t j = i + 1u;
+            while (j < slen && steps[j].time == ST_TIE)
+                j++;
+            uint32_t last = j - 1u;
+            int32_t bw = foot64_x(last) + 2 - x;
+            uint16_t col;
+            if (step_ratchet(st) > 1u)       col = T_REC;
+            else if (last > i)               col = T_ACCENT;
+            else if (st->flags & SF_ACCENT)  col = T_ACCENT;
+            else                             col = T_TEXT;
+            cv_rect(x, 0, bw, 11, col);
+        }
+    }
+
+    if (song.playing) {
+        uint32_t ph = (uint32_t)t->seq_idx % NSTEP;
+        cv_rect(foot64_x(ph), 12, 2, 3, T_TEXT);
+    }
+    if (song.seq_mode) {
+        uint32_t cur = (uint32_t)ui.cursor % NSTEP;
+        cv_rect(foot64_x(cur), 12, 2, 3, T_REC);
+    }
+}
+
 static void draw_foot(void)
 {
     char s[48], pn[16], ti[20], ln[24];
@@ -920,7 +1023,7 @@ static void draw_foot(void)
     str_cpy(s + str_len(s), pn, 16);
     str_cpy(s + str_len(s), ti, sizeof ti);
     {   /* step markers: the playhead only when it is in the shown bank, the cursor only in SEQ */
-        uint32_t ph = song.playing && t->seq_idx / 16u == ui.bank ? t->seq_idx : 0xFFu;
+        uint32_t ph = song.playing ? t->seq_idx : 0xFFu;
         sig = str_hash(0x9E3779B9u, s) + ph * 97u + (song.seq_mode ? ui.cursor : 0xFFu) * 3001u + steps_hash(t) +
               (ui.home ? 0u : page_icon(pg)) * 7121u +
               ui.bank * 7u + (uint32_t)t->p[P_SLEN] * 13u;
@@ -978,24 +1081,7 @@ static void draw_foot(void)
         else
             cv_key_hint(232 - kh_w(KC_KEYS, "STEPS"), 2, KC_KEYS, "STEPS", 1, T_BG);   /* the keys are the steps */
     } else {
-        uint32_t i;
-        if ((ui.bank + 1u) * 16u <= (uint32_t)t->p[P_SLEN])
-            GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H | AL_CELLS | AL_N(16), "footer step bars centred");
-        for (i = 0; i < 16u; i++) {                   /* row 1: the cursor's bank, 16 bars in 4 groups */
-            uint32_t si = ui.bank * 16u + i;
-            int32_t sx = bar_x(i);                    /* (centred: x 12 .. 228) */
-            const step_t *st = &seq_steps(t)[si];
-            if (si >= (uint32_t)t->p[P_SLEN])
-                continue;
-            if (step_on(st))                          /* a note: a bar (accented: the accent) */
-                cv_rrect(sx, 1, 9, 11, 2, (st->flags & SF_ACCENT) ? T_ACCENT : T_THEME, T_BG);
-            else                                      /* empty: a stub (a tie: brighter) */
-                cv_rrect(sx, 9, 9, 3, 1, st->time == ST_TIE ? T_MID : T_RAISE, T_BG);
-            if (song.seq_mode && si == ui.cursor)
-                cv_rect(sx, 14, 9, 2, T_ACCENT);        /* the step edited */
-            else if (song.playing && si == t->seq_idx)
-                cv_rect(sx, 14, 9, 2, T_TEXT);          /* the step sounding */
-        }
+        draw_foot64(t);
     }
     {   /* row 2: engine icon + name, sound, page title at the right with its icon before it (MIXER, PHRASES, SONG,
          * AUTOMATION); icons: their ink on the names' capitals */
@@ -1438,7 +1524,7 @@ static void draw_columns(void)
  * Logo: 193 x 35 px, 2 bits a pixel (high bits first): 0 clear, 1 white, 2 red, 3 blue; source is the ASCII art
  * supplied at build time (. W R B). */
 #ifndef FM1_BUILD_VERSION
-#define FM1_BUILD_VERSION "1.1.0"
+#define FM1_BUILD_VERSION "1.1.1"
 #endif
 #define FM1_LOGO_W 193
 #define FM1_LOGO_H 35

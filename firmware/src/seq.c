@@ -1065,7 +1065,10 @@ static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint
     if (s->time == ST_TIE) {
         if (t->seq_n) {
             t->seq_off = gate + period / 2u;
-            t->seq_hold = (s->flags & SF_SLIDE) != 0 || next_tie;   /* chains hold at any GATE / swing */
+            /* chains hold at any GATE / swing; also hold during live recording so the note bridges
+             * the wrap before rec_hold writes the next TIE step */
+            t->seq_hold = (s->flags & SF_SLIDE) != 0 || next_tie
+                       || (t->rh_n && (idx + 1u) % len != (uint32_t)t->rh_start);
         }
         return;
     }
@@ -1117,7 +1120,10 @@ static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint
         if (!((sk >> i) & 1u))
             t->seq_notes[t->seq_n++] = nn[i];
     t->seq_off = gate;
-    t->seq_hold = hits == 1u && ((s->flags & SF_SLIDE) != 0 || next_tie);   /* next step a TIE: keep the notes to it */
+    /* next step a TIE: keep notes to it; also hold on the note-on step itself during live recording
+     * so its first TIE step can extend it on the first pass, before rec_hold has written it */
+    t->seq_hold = hits == 1u && ((s->flags & SF_SLIDE) != 0 || next_tie
+               || (t->rh_n && idx == (uint32_t)t->rh_start));
 }
 
 /* MENU > CONTROL > STEP PREVIEW (1.2, Discussion #169): the UI asks for a step of a track to sound once (aud_req: step
