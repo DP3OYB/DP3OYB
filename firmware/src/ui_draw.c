@@ -919,9 +919,7 @@ static void draw_foot64(const track_t *t)
     const step_t *steps = seq_steps(t);
     uint32_t slen = (uint32_t)t->p[P_SLEN];
     int is_drum = drum_track(t);
-    uint32_t epoly = ENGINES[t->eng_req % NENGINES]->poly;
-    int is_poly = !is_drum && epoly > 1u;
-    uint32_t i, last_voices = 0u;              /* voice count of the last NOTE step (poly/drum) */
+    uint32_t i, last_voices = 0u;
 
     for (i = 0; i < NSTEP; i++) {
         const step_t *st = &steps[i];
@@ -932,52 +930,39 @@ static void draw_foot64(const track_t *t)
             continue;
         }
 
-        if (is_poly || is_drum) {
-            /* poly/drum: each step column is independent so voice count is accurate per position */
-            if (st->time == ST_TIE) {
-                if (last_voices)
-                    foot64_vstack(x, 2, last_voices, T_ACCENT);  /* tied: inherit voice count */
-                else
-                    cv_rect(x, 9, 2, 2, T_RAISE);
-                continue;
+        if (st->time == ST_TIE) {
+            if (!last_voices) {
+                /* wrap-around TIE: find the source note by scanning backward through the pattern */
+                uint32_t src = pr_src(t, i, slen);
+                if (src < NSTEP) {
+                    const step_t *ns = &steps[src];
+                    last_voices = is_drum
+                        ? (uint32_t)__builtin_popcount(step_lanes(ns))
+                        : (uint32_t)(ns->n > 1u ? ns->n : 1u);
+                }
             }
-            if (!step_on(st)) {
+            if (last_voices)
+                foot64_vstack(x, 2, last_voices, T_ACCENT);
+            else
                 cv_rect(x, 9, 2, 2, T_RAISE);
-                last_voices = 0u;
-                continue;
-            }
-            last_voices = is_drum
-                ? (uint32_t)__builtin_popcount(step_lanes(st))
-                : (uint32_t)(st->n > 1u ? st->n : 1u);
-            {
-                uint16_t col;
-                if (step_ratchet(st) > 1u)      col = T_REC;
-                else if (st->flags & SF_ACCENT)  col = T_ACCENT;
-                else                             col = T_TEXT;
-                foot64_vstack(x, 2, last_voices, col);
-            }
             continue;
         }
 
-        /* mono: TIE steps absorbed into the note's spanning block */
-        if (st->time == ST_TIE)
-            continue;
         if (!step_on(st)) {
             cv_rect(x, 9, 2, 2, T_RAISE);
+            last_voices = 0u;
             continue;
         }
+
+        last_voices = is_drum
+            ? (uint32_t)__builtin_popcount(step_lanes(st))
+            : (uint32_t)(st->n > 1u ? st->n : 1u);
         {
-            uint32_t j = i + 1u;
-            while (j < slen && steps[j].time == ST_TIE)
-                j++;
-            uint32_t last = j - 1u;
-            int32_t bw = foot64_x(last) + 2 - x;
             uint16_t col;
-            if (step_ratchet(st) > 1u)       col = T_REC;
-            else if (last > i)               col = T_ACCENT;
+            if (step_ratchet(st) > 1u)      col = T_REC;
             else if (st->flags & SF_ACCENT)  col = T_ACCENT;
             else                             col = T_TEXT;
-            cv_rect(x, 0, bw, 11, col);
+            foot64_vstack(x, 2, last_voices, col);
         }
     }
 
@@ -1524,7 +1509,7 @@ static void draw_columns(void)
  * Logo: 193 x 35 px, 2 bits a pixel (high bits first): 0 clear, 1 white, 2 red, 3 blue; source is the ASCII art
  * supplied at build time (. W R B). */
 #ifndef FM1_BUILD_VERSION
-#define FM1_BUILD_VERSION "1.1.1"
+#define FM1_BUILD_VERSION "1.1.2"
 #endif
 #define FM1_LOGO_W 193
 #define FM1_LOGO_H 35

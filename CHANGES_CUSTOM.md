@@ -2,6 +2,20 @@
 
 ---
 
+## v1.1.2
+
+### Realtime recording wrap-around visual fix
+
+**Files:** `firmware/src/ui_draw.c`
+
+The 64-step footer bar did not show TIE steps that wrapped across the pattern boundary. After recording a note held from step 9 of a 16-step pattern for the full 16 steps, the wrapped TIE steps at positions 0–8 were invisible (dim stubs) even though audio played correctly.
+
+**Root cause:** `draw_foot64` tracked `last_voices` only forward through the loop. When the loop started at step 0, `last_voices` was 0, so wrapped TIE steps (steps 0–8) drew as dim stubs. The separate mono/poly code paths also caused inconsistent appearance across track types.
+
+**Fix:** Unified all non-drum tracks into one code path. For any TIE step where `last_voices` is 0, `pr_src` scans backward through the pattern (wrapping via `% len`) to find the source note. This seeds `last_voices` correctly for wrapped TIE steps. All tracks now render identically as individual per-step vstack markers.
+
+---
+
 ## v1.1.1
 
 ### Realtime recording wrap-around fix
