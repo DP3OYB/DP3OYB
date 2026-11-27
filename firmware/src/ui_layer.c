@@ -1022,11 +1022,14 @@ static void lcellw(int32_t x, int32_t y, int32_t w, int32_t h, const char *note,
         GFX_HOOK_ALIGN(x, 0, x + w, 0, AL_H | AL_PASS, "layer cell icon / name centred across");
         cv_text_in(x, t + 14 - AF_S_CAP_Y, w, &AF_S, name, ink, fill);
     } else if (name && *name) {                           /* a key's row: the icon and the name on its middle */
-        if (!note && icon < ICON_COUNT) {                  /* (the EDIT layer: the engine's icon instead of the key) */
+        if (!note && icon < ICON_COUNT) {                  /* icon + right-aligned name */
             GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "layer key cell icon / name centred up/down");
             cv_icon_in(x + 3, y, 0, h, 12, icon, ink, fill);
             GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "layer key cell icon / name centred up/down");
             cv_text_r(x + w - 3, y + CAP_IN(S, h), &AF_S, name, ink, fill);
+        } else if (!note) {                                /* no icon, no note key: name centred in cell */
+            GFX_HOOK_ALIGN(x, y, x + w, y + h, AL_HV, "layer key cell name centred");
+            cv_text_in(x, y + CAP_IN(S, h), w, &AF_S, name, ink, fill);
         } else {
             GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "layer key cell icon / name centred up/down");
             cv_text_r(x + w - 5, y + CAP_IN(S, h), &AF_S, name, ink, fill);
@@ -1178,7 +1181,7 @@ static void layer_edit(void)                            /* the engines from F3, 
         int32_t x = LC_X(i % 4u), y = 4 + (int32_t)(h + 4u) * (int32_t)(i / 4u);
         const engine_t *en = ENGINES[eng_vis(i) % NENGINES];
         if (i < n)
-            lcell(x, y, (int32_t)h, 0, engine_icon(en->name), 0, h > 24u ? en->name : eng_abbr(en->name),
+            lcell(x, y, (int32_t)h, 0, ICON_NONE, 0, en->name,
                   eng_vis(i) == TSEL->eng_req % NENGINES ? LS_SEL : LS_OFF, 0);
         else
             lcell(x, y, (int32_t)h, 0, i == n ? ICON_X_WARN : ICON_COUNT, 0, i == n ? "INIT" : "CLEAN",   /* (CLEAN: no

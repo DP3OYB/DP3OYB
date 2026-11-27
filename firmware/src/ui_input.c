@@ -1182,10 +1182,13 @@ static void act_do(void)
         ui.act = 0;
     switch (id) {
     case G_LOAD:                                          /* 1.8: over changes not saved, the dialog first */
-        if (project_used(k) && proj_changed())
+        if (!project_used(k)) {
+            if (proj_changed()) confirm_open(CF_CLEAR_ALL, k); else (void)project_new();
+        } else if (proj_changed()) {
             confirm_open(CF_LOAD_PROJ, k);
-        else
+        } else {
             project_load(k);
+        }
         break;
     case G_SAVE:                                          /* the NAME screen writes it */
         if (transport_busy())

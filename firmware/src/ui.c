@@ -1878,7 +1878,7 @@ static int act_ready(void)
         return !song.playing && project_used((uint32_t)song.g[G_SLOT] - 1u);
     id = cur_page()->id[c & 3u];
     if (id == G_LOAD)
-        return project_used((uint32_t)song.g[G_SLOT] - 1u);
+        return 1;
     if (id == G_SAVE)
         return !song.playing;
     if (id == G_CLRSEQ)

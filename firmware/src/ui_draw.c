@@ -169,8 +169,8 @@ static int32_t roll_text(uint32_t k, int32_t x, int32_t y, const char *s, uint16
 #define HEAD_BAT_X 214                                 /* the battery's cell */
 #define HEAD_GRP_R 208                                 /* the octave / song row ends here */
 #define HEAD_MSG_W 166                                 /* a message centred on x 120: 37..203 (after the REC mark) */
-#define HEAD_GAP 4                                     /* ink to ink: the metronome -> the BPM -> the lock */
-#define HEAD_PLAY_GAP 6                                /* the play state -> the metronome */
+#define HEAD_GAP 4                                     /* ink to ink: the BPM -> the lock */
+#define HEAD_PLAY_GAP 6                                /* the play state -> the BPM */
 /* the header's centre (1.5.6): the play state, the metronome and the BPM (BPM LOCK ON: its lock) as one group, its
  * ink (gx0 .. gx1, past it) centred on x 120 (before: the BPM's alone, the rest hanging off to the left). The play
  * state's slot (px0 .. px1) is as wide as the wider of stop and play, so the group stays put on PLAY / STOP (the
@@ -182,14 +182,10 @@ static int32_t roll_text(uint32_t k, int32_t x, int32_t y, const char *s, uint16
 typedef struct { int32_t bx, b[4], mx0, mx1, sx0, sx1, px0, px1, gx0, gx1; } head_geo_t;
 static void head_geo(head_geo_t *g, const char *bpm)
 {
-    int32_t ib[4], lb[4], pb[4], c = 16, pw, lw = 0;
-    uint32_t sz = 16;
+    int32_t lb[4], pb[4], pw, lw = 0, bx0;
     char z[8] = "0000000";
     z[str_len(bpm) < 7u ? str_len(bpm) : 7u] = 0;
     text_ink(&AF_M, z, g->b);
-    icon_ink(16, ICON_TEMPO, ib);
-    if (icon_cell(&sz, ICON_TEMPO) >= 0)
-        c = (int32_t)sz;
     icon_ink(16, ICON_X_STOP, pb);                     /* the play state's slot: the wider of stop and play */
     pw = pb[2] - pb[0];
     icon_ink(16, ICON_X_PLAY, pb);
@@ -198,28 +194,15 @@ static void head_geo(head_geo_t *g, const char *bpm)
     icon_ink(16, ICON_X_LOCK, lb);
     if (ui_prefs & PREF_BPM_LOCK)
         lw = HEAD_GAP + lb[2] - lb[0];
-    g->gx0 = HALF_UP(240 - (pw + HEAD_PLAY_GAP + (ib[2] - ib[0]) + HEAD_GAP + (g->b[2] - g->b[0]) + lw));
+    g->gx0 = HALF_UP(240 - (pw + HEAD_PLAY_GAP + (g->b[2] - g->b[0]) + lw));
     g->px0 = g->gx0;
     g->px1 = g->px0 + pw;
-    g->mx0 = g->px1 + HEAD_PLAY_GAP;
-    g->mx1 = g->mx0 + (ib[2] - ib[0]);
-    g->bx = g->mx1 + HEAD_GAP - g->b[0];
+    bx0 = g->px1 + HEAD_PLAY_GAP;
+    g->mx0 = bx0; g->mx1 = bx0;
+    g->bx = bx0 - g->b[0];
     g->gx1 = g->bx + g->b[2] + lw;
-    g->sx0 = g->mx1 + (ib[0] > c - ib[2] ? ib[0] : c - ib[2]);
+    g->sx0 = bx0;
     g->sx1 = g->bx + g->b[2] + HEAD_GAP - lb[0];
-}
-/* the metronome with its ink at x0 (beat: click_beat_now; the 2nd and 4th mirrored, the same ink box; the 1st the
- * accent's). Mirrored by cv_flip: the cell's alpha drawn right to left, no second glyph */
-static void head_metro(int32_t x0, int32_t beat)
-{
-    int32_t ib[4], c = 16;
-    uint32_t sz = 16;
-    icon_ink(16, ICON_TEMPO, ib);
-    if (icon_cell(&sz, ICON_TEMPO) >= 0)
-        c = (int32_t)sz;
-    cv_flip = (uint8_t)(beat > 0 && (beat & 1));
-    cv_icon_mid(x0 - (cv_flip ? c - ib[2] : ib[0]), H_HEAD / 2, 16, ICON_TEMPO, beat == 0 ? T_ACCENT : T_MID, T_BG);
-    cv_flip = 0;
 }
 /* the width cv_free_hint(x, .., s, .., maxw) draws (its word, keycap and the ellipsised rest) */
 static int32_t head_hint_w(const char *s, int32_t maxw)
@@ -324,11 +307,8 @@ static void head_group(void)
 }
 static void draw_head(void)
 {
-    static int16_t metro_x = -1;                       /* the metronome's ink as drawn (-1: hidden), its beat */
-    static int8_t metro_beat;
     char b[16];
     head_geo_t g;
-    int32_t beat = -1;                                 /* the metronome stands still (its swing removed in 1.1.5) */
     uint32_t rec = (song.rec >> song.sel) & 1u ? 2u : song.rec != 0u;   /* 2 the selected track armed, 1 another */
     char sl[3];
     int slot = head_slot(sl);
@@ -360,17 +340,9 @@ static void draw_head(void)
             roll_text(ROLL_BPM, g.bx - g.sx0, HEAD_MY, b, ui.bpm_t ? T_ACCENT : T_THEME);
             cv_blit((uint32_t)g.sx0, Y_HEAD);
         }
-        if (metro_x >= 0 && beat != metro_beat) {      /* a beat: the metronome's cell only (either way round) */
-            int32_t cx = g.mx0 - (g.sx0 - g.mx1);
-            metro_beat = (int8_t)beat;
-            cv_begin((uint32_t)(g.sx0 - cx), H_HEAD, T_BG);
-            head_metro(g.mx0 - cx, beat);
-            cv_blit((uint32_t)cx, Y_HEAD);
-        }
         return;
     }
     ui.head_sig = sig;
-    metro_x = -1;
     cv_begin(240, H_HEAD, T_BG);
     cv_icon_mid(HEAD_TRK_X, H_HEAD / 2, 16, trk_icon(song.sel, 1), midi_lit(song.sel) ? T_TEXT : T_ACCENT, T_BG);   /* (1.5.5:
                                                        * a MIDI IN note into it, #208: lit) */
@@ -400,9 +372,6 @@ static void draw_head(void)
                                                         * accent's, about to play), stop */
         cv_icon_mid(g.px1 - ib[2], H_HEAD / 2, 16, id, /* (right-aligned in its slot) */
                     song.playing ? T_THEME : seq_counting() ? T_ACCENT : T_MID, T_BG);
-        head_metro(g.mx0, beat);
-        metro_x = (int16_t)g.mx0;
-        metro_beat = (int8_t)beat;
         if (!ui.roll[ROLL_BPM].from[0])
             GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
         roll_text(ROLL_BPM, g.bx, HEAD_MY, b, ui.bpm_t ? T_ACCENT : T_THEME);
@@ -1070,21 +1039,15 @@ static void draw_foot(void)
     }
     {   /* row 2: engine icon + name, sound, page title at the right with its icon before it (MIXER, PHRASES, SONG,
          * AUTOMATION); icons: their ink on the names' capitals */
-        uint32_t pi = ui.home ? ICON_NONE : page_icon(pg), ei = FELUCCA_ICONS ? engine_icon(ename) : ICON_NONE;
+        uint32_t pi = ui.home ? ICON_NONE : page_icon(pg);
         int32_t r = show_hint ? 202 : 232, tx, ex, need = text_w(&AF_S, pn), ew = text_w(&AF_S, ename);
-        ex = 8 + (FELUCCA_ICONS ? 12 + 5 : 0) + (ew < 80 ? ew : 80);   /* (where the engine's name ends) */
+        ex = 8 + (ew < 80 ? ew : 80);                     /* (where the engine's name ends) */
         tx = r - text_w(&AF_S, ti) - (pi != ICON_NONE ? 16 : 0);
         if (!ui.home && pg->graph == GR_EVENTS && tx - 12 - (ex + 10) < need) {
             str_cpy(ti + 4, ti + 10, sizeof ti - 4);    /* #93: "AUTOMATION 6/6" -> "AUTO 6/6" where the sound's name */
             tx = r - text_w(&AF_S, ti) - (pi != ICON_NONE ? 16 : 0);   /* would be cut (MENU > LARGE) */
         }
-        x = 8;
-        if (FELUCCA_ICONS) {
-            if (ei != ICON_NONE)
-                GFX_HOOK_ALIGN(0, 19 + AF_S_CAP_Y, 0, 19 + AF_S_CAP_Y + AF_S_CAP_H, AL_V,
-                               "footer icons on the names' line");
-            x += cv_icon_in(x, 19 + AF_S_CAP_Y, 0, AF_S_CAP_H, 12, ei, T_MID, T_BG) + 5;
-        }
+        x = 5;
         x = cv_text_fit(x, 19, &AF_S, ename, T_THEME, T_BG, 80);
         cv_free_text(x + 10, 19, &AF_S, pn, T_TEXT, T_BG, tx - 12 - (x + 10));
         if (pi != ICON_NONE) {
@@ -1136,7 +1099,7 @@ static void draw_columns(void)
         uint32_t row = ui.song_row < CHAIN_ROWS ? ui.song_row : CHAIN_ROWS - 1u, k = ui.song_trk % NTRK, sl;
         int used = row < chain_config.count;
         fmt_int(val, (int32_t)row + 1);
-        draw_column(0, "SEC", val, "", VAL(0u), -1, ICON_X_SONG);
+        draw_column(0, "SEC", val, "", VAL(0u), -1, ICON_NONE);
         val[0] = 'T';
         val[1] = (char)('1' + k);
         val[2] = 0;
@@ -1509,7 +1472,7 @@ static void draw_columns(void)
  * Logo: 193 x 35 px, 2 bits a pixel (high bits first): 0 clear, 1 white, 2 red, 3 blue; source is the ASCII art
  * supplied at build time (. W R B). */
 #ifndef FM1_BUILD_VERSION
-#define FM1_BUILD_VERSION "1.1.2"
+#define FM1_BUILD_VERSION "1.1.3"
 #endif
 #define FM1_LOGO_W 193
 #define FM1_LOGO_H 35

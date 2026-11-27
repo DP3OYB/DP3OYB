@@ -2,6 +2,42 @@
 
 ---
 
+## v1.1.3
+
+### Load blank project from empty slot
+
+**Files:** `firmware/src/ui_input.c`, `firmware/src/ui.c`
+
+Pressing LOAD (k3) on an empty project slot now loads a blank project — equivalent
+to MENU → SYSTEM → CLEAR ALL — instead of showing "EMPTY SLOT" and doing nothing.
+If there are unsaved changes, the existing "CLEAR ALL?" confirmation dialog appears
+first; otherwise the blank project loads immediately.
+
+The OCT+ LED now breathes and the [OCT+] hint displays in accent colour whenever
+LOAD is the picked column, including on empty slots.
+
+This makes starting a new project from the PROJECT page a single action: select an
+empty slot with k1 and press LOAD.
+
+### UI de-cluttering
+
+**Files:** `firmware/src/ui_draw.c`, `firmware/src/ui_layer.c`
+
+Four visual elements removed to reduce clutter:
+
+- **Footer engine icon**: the icon to the left of the engine name on every page has
+  been removed. The engine and sound text shifts 3 px left, in line with the track
+  number bubble and the content area.
+- **EDIT sub-menu icons**: the engine icons inside the EDIT hold layer's key cells
+  have been removed. Engine names are now centred in each cell and shown in full
+  (`PHASE` not `PHAS`, `SAMPLE` not `SMPL`, `VOICE` not `VOCL`, etc.).
+- **Header metronome**: the metronome icon in the header centre has been removed.
+  The BPM number is centred directly after the play/stop icon.
+- **SONG page SEC icon**: the song-disc icon in the SEC (k1) column of the SONG
+  arranger page has been removed.
+
+---
+
 ## v1.1.2
 
 ### Realtime recording wrap-around visual fix
